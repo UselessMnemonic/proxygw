@@ -106,10 +106,10 @@ func (bc *BaseClient) start() {
 			if err != nil {
 				return
 			}
-			if !(p.Id == 0 || !method.IsResponse(p.Method)) {
+			if p.Id != 0 && !method.IsResponse(p.Method) {
 				continue
 			}
-			if err := ParseRawPacket(bc.conn.codec, &p); err != nil {
+			if err := ParseRawBody(bc.conn.codec, &p); err != nil {
 				return
 			}
 			if p.Id == 0 {

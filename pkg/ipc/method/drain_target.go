@@ -2,7 +2,7 @@ package method
 
 // DrainTargetRequest asks the plugin to drain/deactivate a target.
 type DrainTargetRequest struct {
-	TargetID string `json:"target_id"`
+	Name string `json:"name"`
 }
 
 func (DrainTargetRequest) Method() uint16 {

@@ -145,7 +145,7 @@ func (bp *BasePeer) start() {
 			if err != nil {
 				return
 			}
-			if err := ParseRawPacket(bp.conn.codec, &p); err != nil {
+			if err := ParseRawBody(bp.conn.codec, &p); err != nil {
 				return
 			}
 			// emit notification
@@ -174,7 +174,7 @@ func MakePacket[M method.Method](id uint32, body M) Packet {
 	}
 }
 
-func ParseRawPacket(codec codec.Codec, packet *Packet) error {
+func ParseRawBody(codec codec.Codec, packet *Packet) error {
 	raw := packet.Body.([]byte)
 	switch packet.Method {
 	case method.MethodEmpty:

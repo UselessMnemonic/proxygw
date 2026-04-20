@@ -7,5 +7,5 @@ import (
 
 type Kind interface {
 	Name() string
-	New(config.Protocol, netip.AddrPort, map[string]any) (Driver, error)
+	New(string, config.Protocol, netip.AddrPort, map[string]any) (Driver, error)
 }

@@ -2,7 +2,7 @@ package method
 
 // FrontendShouldWarmNotification tells the host that the frontend's target should be warmed.
 type FrontendShouldWarmNotification struct {
-	FrontendID string `json:"frontend_id"`
+	Name string `json:"name"`
 }
 
 func (FrontendShouldWarmNotification) Method() uint16 {

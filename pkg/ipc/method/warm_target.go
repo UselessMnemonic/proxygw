@@ -2,7 +2,7 @@ package method
 
 // WarmTargetRequest asks the plugin to warm/activate a target.
 type WarmTargetRequest struct {
-	TargetID string `json:"target_id"`
+	Name string `json:"name"`
 }
 
 func (WarmTargetRequest) Method() uint16 {

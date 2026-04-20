@@ -33,8 +33,10 @@ const (
 
 	MethodCloseFrontendRequest
 	MethodCloseFrontendResponse
+)
 
-	MethodFrontendShouldWarmNotification uint16 = 100
+const (
+	MethodFrontendShouldWarmNotification uint16 = iota + 32768
 )
 
 type Method interface {
@@ -42,5 +44,8 @@ type Method interface {
 }
 
 func IsResponse(method uint16) bool {
-	return method%2 == 0
+	if method >= 32768 {
+		return false
+	}
+	return method%2 == 1
 }

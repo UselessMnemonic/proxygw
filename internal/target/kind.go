@@ -2,5 +2,5 @@ package target
 
 type Kind interface {
 	Name() string
-	New(map[string]any) (Driver, error)
+	New(string, map[string]any) (Driver, error)
 }

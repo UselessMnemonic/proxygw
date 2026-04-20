@@ -198,7 +198,7 @@ func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 		return nil, fmt.Errorf("flow group: %w", err)
 	}
 
-	driver, err := kind.New(cfg.Options)
+	driver, err := kind.New(cfg.Name, cfg.Options)
 	if err != nil {
 		dnatGroup.Close()
 		return nil, fmt.Errorf("driver for kind %q: %w", cfg.Kind, err)
@@ -272,7 +272,7 @@ func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 		return nil, fmt.Errorf("frontend kind %q: %w", cfg.Kind, ErrFrontendKindNotRegistered)
 	}
 
-	driver, err := kind.New(cfg.Protocol, cfg.Listen, cfg.Options)
+	driver, err := kind.New(cfg.Name, cfg.Protocol, cfg.Listen, cfg.Options)
 	if err != nil {
 		return nil, fmt.Errorf("driver for kind %q: %w", cfg.Kind, err)
 	}

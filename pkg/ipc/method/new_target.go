@@ -2,9 +2,9 @@ package method
 
 // NewTargetRequest asks the plugin to construct a target driver instance.
 type NewTargetRequest struct {
-	TargetID string         `json:"target_id"`
-	Kind     string         `json:"kind"`
-	Options  map[string]any `json:"options,omitempty"`
+	Name    string         `json:"name"`
+	Kind    string         `json:"kind"`
+	Options map[string]any `json:"options,omitempty"`
 }
 
 func (NewTargetRequest) Method() uint16 {

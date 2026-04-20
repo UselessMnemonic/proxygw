@@ -10,7 +10,7 @@ func (nilTarget) Name() string {
 	return "nil"
 }
 
-func (nilTarget) New(map[string]any) (target.Driver, error) {
+func (nilTarget) New(string, map[string]any) (target.Driver, error) {
 	return nilTarget{}, nil
 }
 

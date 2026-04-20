@@ -2,7 +2,7 @@ package method
 
 // CloseFrontendRequest asks the plugin to destroy a frontend driver instance.
 type CloseFrontendRequest struct {
-	FrontendID string `json:"frontend_id"`
+	Name string `json:"name"`
 }
 
 func (CloseFrontendRequest) Method() uint16 {

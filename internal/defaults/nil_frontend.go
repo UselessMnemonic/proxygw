@@ -16,7 +16,7 @@ func (nilFrontend) Name() string {
 	return "nil"
 }
 
-func (nilFrontend) New(config.Protocol, netip.AddrPort, map[string]any) (frontend.Driver, error) {
+func (nilFrontend) New(string, config.Protocol, netip.AddrPort, map[string]any) (frontend.Driver, error) {
 	result := make(chan struct{}, 1)
 	result <- struct{}{}
 	return nilDriver(result), nil

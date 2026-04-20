@@ -4,11 +4,11 @@ import "proxygw/pkg/config"
 
 // NewFrontendRequest asks the plugin to construct a frontend driver instance.
 type NewFrontendRequest struct {
-	FrontendID string          `json:"frontend_id"`
-	Kind       string          `json:"kind"`
-	Protocol   config.Protocol `json:"protocol"`
-	Listen     string          `json:"listen"`
-	Options    map[string]any  `json:"options,omitempty"`
+	Name     string          `json:"name"`
+	Kind     string          `json:"kind"`
+	Protocol config.Protocol `json:"protocol"`
+	Listen   string          `json:"listen"`
+	Options  map[string]any  `json:"options,omitempty"`
 }
 
 func (NewFrontendRequest) Method() uint16 {

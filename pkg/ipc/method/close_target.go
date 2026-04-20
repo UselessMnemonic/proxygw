@@ -2,7 +2,7 @@ package method
 
 // CloseTargetRequest asks the plugin to destroy a target driver instance.
 type CloseTargetRequest struct {
-	TargetID string `json:"target_id"`
+	Name string `json:"name"`
 }
 
 func (CloseTargetRequest) Method() uint16 {

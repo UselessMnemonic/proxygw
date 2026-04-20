@@ -99,10 +99,10 @@ func (bs *BaseServer) start() {
 			if err != nil {
 				return
 			}
-			if !(p.Id == 0 || method.IsResponse(p.Method)) {
+			if p.Id != 0 && method.IsResponse(p.Method) {
 				continue
 			}
-			if err := ParseRawPacket(bs.conn.codec, &p); err != nil {
+			if err := ParseRawBody(bs.conn.codec, &p); err != nil {
 				return
 			}
 			if p.Id == 0 {

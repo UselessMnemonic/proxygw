@@ -2,7 +2,7 @@ package method
 
 // StopFrontendRequest asks the plugin to stop listening for a frontend.
 type StopFrontendRequest struct {
-	FrontendID string `json:"frontend_id"`
+	Name string `json:"name"`
 }
 
 func (StopFrontendRequest) Method() uint16 {

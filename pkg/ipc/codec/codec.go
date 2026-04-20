@@ -1,6 +1,9 @@
 package codec
 
-import "io"
+import (
+	"io"
+	"strings"
+)
 
 // Encoder encodes values onto a stream.
 type Encoder interface {
@@ -24,4 +27,15 @@ type Codec interface {
 	Unmarshal([]byte, any) error
 	// Raw returns the codec's raw message type, interchangeable with []byte
 	Raw() any
+}
+
+func FindByName(name string) Codec {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "json":
+		return JSON
+	case "cbor":
+		return CBOR
+	default:
+		return nil
+	}
 }
