@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"proxygw/internal/dataplane"
 	"proxygw/pkg/config"
+	"slices"
 	"sync"
 )
 
@@ -94,6 +96,12 @@ func (t *Target) Endpoint(name string) (Endpoint, bool) {
 	return ep, exists
 }
 
+func (t *Target) Endpoints() []Endpoint {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	return slices.Collect(maps.Values(t.endpoints))
+}
+
 func (t *Target) AddEndpoint(endpoint Endpoint) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -126,7 +134,7 @@ func (t *Target) RemoveEndpoint(name string) error {
 	return nil
 }
 
-func (t *Target) Activate() bool {
+func (t *Target) Warm() bool {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	switch t.state {
@@ -144,7 +152,7 @@ func (t *Target) Activate() bool {
 	}
 }
 
-func (t *Target) Deactivate() bool {
+func (t *Target) Drain() bool {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	switch t.state {
@@ -215,20 +223,20 @@ func (t *Target) tryDrain() {
 	}
 }
 
-func (t *Target) tryClose() {
+func (t *Target) end() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	t.state = Closed
-	t.dnatGroup.Close()
+	t.err = t.dnatGroup.Close()
 	t.driver.Close()
 }
 
 func (t *Target) start() {
 	t.wg.Go(func() {
+		defer t.end()
 		for {
 			select {
 			case <-t.ctx.Done():
-				t.tryClose()
 				return
 			case next := <-t.requests:
 				switch next {

@@ -13,6 +13,7 @@ import (
 type Frontend struct {
 	name     string
 	target   *target.Target
+	endpoint target.Endpoint
 	driver   Driver
 	requests chan State
 	mapping  dataplane.DNATMapping
@@ -55,6 +56,7 @@ func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, d
 	f := &Frontend{
 		name:     cfg.Name,
 		target:   target,
+		endpoint: endpoint,
 		driver:   driver,
 		requests: make(chan State, 1),
 		mapping:  mapping,
@@ -80,6 +82,22 @@ func (f *Frontend) Kind() Kind {
 
 func (f *Frontend) Target() *target.Target {
 	return f.target
+}
+
+func (f *Frontend) Endpoint() target.Endpoint {
+	return f.endpoint
+}
+
+func (f *Frontend) Protocol() config.Protocol {
+	return f.mapping.Protocol
+}
+
+func (f *Frontend) Listen() string {
+	return f.mapping.Source.String()
+}
+
+func (f *Frontend) ProxyAddress() string {
+	return f.mapping.Destination.String()
 }
 
 func (f *Frontend) State() State {
@@ -169,21 +187,23 @@ func (f *Frontend) tryStop() {
 	f.state = Stopped
 }
 
-func (f *Frontend) tryClose() {
+func (f *Frontend) end() {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-	f.target.DNATGroup().DelMappings(f.mapping)
+	f.err = f.target.DNATGroup().DelMappings(f.mapping)
 	f.state = Closed
 	f.driver.Close()
 }
 
 func (f *Frontend) start() {
 	f.wg.Go(func() {
+		defer f.end()
 		for {
 			select {
 			case <-f.ctx.Done():
-				f.tryClose()
 				return
+			case <-f.driver.ShouldWarm():
+				f.target.Warm()
 			case next := <-f.requests:
 				switch next {
 				case Starting:

@@ -2,26 +2,28 @@ package defaults
 
 import "proxygw/internal/target"
 
-type NilTarget struct{}
+var NilTarget target.Kind = nilTarget{}
 
-func (NilTarget) Name() string {
+type nilTarget struct{}
+
+func (nilTarget) Name() string {
 	return "nil"
 }
 
-func (NilTarget) New(map[string]any) (target.Driver, error) {
-	return NilTarget{}, nil
+func (nilTarget) New(map[string]any) (target.Driver, error) {
+	return nilTarget{}, nil
 }
 
-func (NilTarget) Kind() target.Kind {
-	return NilTarget{}
+func (nilTarget) Kind() target.Kind {
+	return NilTarget
 }
 
-func (NilTarget) Warm() error {
+func (nilTarget) Warm() error {
 	return nil
 }
 
-func (NilTarget) Drain() error {
+func (nilTarget) Drain() error {
 	return nil
 }
 
-func (NilTarget) Close() {}
+func (nilTarget) Close() {}

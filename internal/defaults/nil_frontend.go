@@ -6,26 +6,36 @@ import (
 	"proxygw/pkg/config"
 )
 
-type NilFrontend struct{}
+var NilFrontend frontend.Kind = nilFrontend{}
 
-func (NilFrontend) Name() string {
+type nilFrontend struct{}
+
+type nilDriver <-chan struct{}
+
+func (nilFrontend) Name() string {
 	return "nil"
 }
 
-func (NilFrontend) New(config.Protocol, netip.AddrPort, map[string]any) (frontend.Driver, error) {
-	return NilFrontend{}, nil
+func (nilFrontend) New(config.Protocol, netip.AddrPort, map[string]any) (frontend.Driver, error) {
+	result := make(chan struct{}, 1)
+	result <- struct{}{}
+	return nilDriver(result), nil
 }
 
-func (NilFrontend) Kind() frontend.Kind {
-	return NilFrontend{}
+func (nilDriver) Kind() frontend.Kind {
+	return NilFrontend
 }
 
-func (NilFrontend) Start() error {
+func (nilDriver) Start() error {
 	return nil
 }
 
-func (NilFrontend) Stop() error {
+func (nilDriver) Stop() error {
 	return nil
 }
 
-func (NilFrontend) Close() {}
+func (self nilDriver) ShouldWarm() <-chan struct{} {
+	return self
+}
+
+func (nilDriver) Close() {}

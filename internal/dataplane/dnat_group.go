@@ -170,10 +170,10 @@ func (dg *DNATGroup) Disable() error {
 }
 
 // Close evicts this group from its parent Dataplane and renders this group unusable.
-func (dg *DNATGroup) Close() {
+func (dg *DNATGroup) Close() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
-	dg.close()
+	return dg.close()
 }
 
 func (dg *DNATGroup) mappings() []DNATMapping {

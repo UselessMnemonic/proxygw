@@ -5,4 +5,12 @@ type StopFrontendRequest struct {
 	FrontendID string `json:"frontend_id"`
 }
 
+func (StopFrontendRequest) Method() uint16 {
+	return MethodStopFrontendRequest
+}
+
 type StopFrontendResponse struct{}
+
+func (StopFrontendResponse) Method() uint16 {
+	return MethodStopFrontendResponse
+}

@@ -3,10 +3,13 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 	"proxygw/internal/dataplane"
+	"proxygw/internal/defaults"
 	"proxygw/internal/frontend"
 	"proxygw/internal/target"
 	"proxygw/pkg/config"
+	"slices"
 	"sync"
 )
 
@@ -46,6 +49,11 @@ func New(ctx context.Context) (*Engine, error) {
 		cancel: cancel,
 		closed: false,
 	}
+
+	// preload defaults
+	e.frontendKinds[defaults.NilFrontend.Name()] = defaults.NilFrontend
+	e.targetKinds[defaults.NilTarget.Name()] = defaults.NilTarget
+
 	e.start()
 	return e, nil
 }
@@ -60,6 +68,12 @@ func (e *Engine) Close() {
 func (e *Engine) Wait() {
 	<-e.ctx.Done()
 	e.wg.Wait()
+}
+
+func (e *Engine) Closed() bool {
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+	return e.closed
 }
 
 func (e *Engine) AddFrontendKind(kind frontend.Kind) error {
@@ -81,6 +95,12 @@ func (e *Engine) GetFrontendKind(name string) frontend.Kind {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.frontendKinds[name]
+}
+
+func (e *Engine) FrontendKinds() []frontend.Kind {
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+	return slices.Collect(maps.Values(e.frontendKinds))
 }
 
 func (e *Engine) DelFrontendKind(name string) error {
@@ -125,6 +145,12 @@ func (e *Engine) GetTargetKind(name string) target.Kind {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.targetKinds[name]
+}
+
+func (e *Engine) TargetKinds() []target.Kind {
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+	return slices.Collect(maps.Values(e.targetKinds))
 }
 
 func (e *Engine) DelTargetKind(name string) error {
@@ -196,6 +222,12 @@ func (e *Engine) GetTarget(name string) *target.Target {
 	return e.targets[name]
 }
 
+func (e *Engine) Targets() []*target.Target {
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+	return slices.Collect(maps.Values(e.targets))
+}
+
 func (e *Engine) DelTarget(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -265,6 +297,12 @@ func (e *Engine) GetFrontend(name string) *frontend.Frontend {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.frontends[name]
+}
+
+func (e *Engine) Frontends() []*frontend.Frontend {
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+	return slices.Collect(maps.Values(e.frontends))
 }
 
 func (e *Engine) DelFrontend(name string) error {
