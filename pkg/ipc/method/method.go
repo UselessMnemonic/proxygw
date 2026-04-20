@@ -6,12 +6,41 @@ const (
 
 	MethodStatusRequest
 	MethodStatusResponse
+
+	MethodPluginInitRequest
+	MethodPluginInitResponse
+
+	MethodNewTargetRequest
+	MethodNewTargetResponse
+
+	MethodWarmTargetRequest
+	MethodWarmTargetResponse
+
+	MethodDrainTargetRequest
+	MethodDrainTargetResponse
+
+	MethodCloseTargetRequest
+	MethodCloseTargetResponse
+
+	MethodNewFrontendRequest
+	MethodNewFrontendResponse
+
+	MethodStartFrontendRequest
+	MethodStartFrontendResponse
+
+	MethodStopFrontendRequest
+	MethodStopFrontendResponse
+
+	MethodCloseFrontendRequest
+	MethodCloseFrontendResponse
+
+	MethodFrontendShouldWarmNotification uint16 = 100
 )
 
 type Method interface {
 	Method() uint16
 }
 
-func IsResponse[M Method](method M) bool {
-	return method.Method()%2 == 0
+func IsResponse(method uint16) bool {
+	return method%2 == 0
 }

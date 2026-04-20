@@ -121,9 +121,6 @@ func (bp *BasePeer) dispatchReq(req Packet) error {
 		errPacket := MakePacket(req.Id, method.ErrorResponse{"existing request already in flight"})
 		return bp.conn.Write(&errPacket)
 	}
-	if err := ParseRawPacket(bp.conn.codec, &req); err != nil {
-		return err
-	}
 	bp.inbox[req.Id] = struct{}{}
 	bp.reqs <- req
 	return nil
@@ -148,19 +145,22 @@ func (bp *BasePeer) start() {
 			if err != nil {
 				return
 			}
+			if err := ParseRawPacket(bp.conn.codec, &p); err != nil {
+				return
+			}
 			// emit notification
 			if p.Id == 0 {
 				bp.notifs <- p
 			}
-			// dispatch request
-			if p.Method%2 == 0 {
-				err = bp.dispatchReq(p)
-				if err != nil {
-					return
-				}
-			}
 			// match outbox
-			bp.matchResp(p)
+			if method.IsResponse(p.Method) {
+				bp.matchResp(p)
+			}
+			// dispatch request
+			err = bp.dispatchReq(p)
+			if err != nil {
+				return
+			}
 		}
 	}()
 }
@@ -186,6 +186,44 @@ func ParseRawPacket(codec codec.Codec, packet *Packet) error {
 		packet.Body = &method.StatusRequest{}
 	case method.MethodStatusResponse:
 		packet.Body = &method.StatusResponse{}
+	case method.MethodPluginInitRequest:
+		packet.Body = &method.PluginInitRequest{}
+	case method.MethodPluginInitResponse:
+		packet.Body = &method.PluginInitResponse{}
+	case method.MethodNewTargetRequest:
+		packet.Body = &method.NewTargetRequest{}
+	case method.MethodNewTargetResponse:
+		packet.Body = &method.NewTargetResponse{}
+	case method.MethodWarmTargetRequest:
+		packet.Body = &method.WarmTargetRequest{}
+	case method.MethodWarmTargetResponse:
+		packet.Body = &method.WarmTargetResponse{}
+	case method.MethodDrainTargetRequest:
+		packet.Body = &method.DrainTargetRequest{}
+	case method.MethodDrainTargetResponse:
+		packet.Body = &method.DrainTargetResponse{}
+	case method.MethodCloseTargetRequest:
+		packet.Body = &method.CloseTargetRequest{}
+	case method.MethodCloseTargetResponse:
+		packet.Body = &method.CloseTargetResponse{}
+	case method.MethodNewFrontendRequest:
+		packet.Body = &method.NewFrontendRequest{}
+	case method.MethodNewFrontendResponse:
+		packet.Body = &method.NewFrontendResponse{}
+	case method.MethodStartFrontendRequest:
+		packet.Body = &method.StartFrontendRequest{}
+	case method.MethodStartFrontendResponse:
+		packet.Body = &method.StartFrontendResponse{}
+	case method.MethodStopFrontendRequest:
+		packet.Body = &method.StopFrontendRequest{}
+	case method.MethodStopFrontendResponse:
+		packet.Body = &method.StopFrontendResponse{}
+	case method.MethodCloseFrontendRequest:
+		packet.Body = &method.CloseFrontendRequest{}
+	case method.MethodCloseFrontendResponse:
+		packet.Body = &method.CloseFrontendResponse{}
+	case method.MethodFrontendShouldWarmNotification:
+		packet.Body = &method.FrontendShouldWarmNotification{}
 	default:
 		return nil
 	}

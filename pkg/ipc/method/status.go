@@ -1,26 +1,47 @@
 package method
 
-// StatusRequest asks the host runtime for status details.
+import "proxygw/pkg/config"
+
+// StatusRequest asks the proxy engine for status details.
 type StatusRequest struct{}
 
 func (StatusRequest) Method() uint16 {
 	return MethodStatusRequest
 }
 
-// StatusResponse reports runtime plugin host state.
+// StatusResponse reports proxy engine state.
 type StatusResponse struct {
-	Plugins []PluginStatus `json:"plugins,omitempty"`
+	Closed    bool             `json:"closed"`
+	Targets   []TargetStatus   `json:"targets,omitempty"`
+	Frontends []FrontendStatus `json:"frontends,omitempty"`
 }
 
 func (StatusResponse) Method() uint16 {
 	return MethodStatusResponse
 }
 
-type PluginStatus struct {
-	Name          string   `json:"name"`
-	Executable    string   `json:"executable"`
-	Connected     bool     `json:"connected"`
-	FrontendKinds []string `json:"frontend_kinds,omitempty"`
-	TargetKinds   []string `json:"target_kinds,omitempty"`
-	LastError     string   `json:"last_error,omitempty"`
+type TargetStatus struct {
+	Name      string               `json:"name"`
+	Kind      string               `json:"kind"`
+	State     string               `json:"state"`
+	LastError string               `json:"last_error,omitempty"`
+	Endpoints []TargetEndpointInfo `json:"endpoints,omitempty"`
+}
+
+type TargetEndpointInfo struct {
+	Name     string          `json:"name"`
+	Protocol config.Protocol `json:"protocol"`
+	Address  string          `json:"address"`
+}
+
+type FrontendStatus struct {
+	Name         string          `json:"name"`
+	Kind         string          `json:"kind"`
+	State        string          `json:"state"`
+	LastError    string          `json:"last_error,omitempty"`
+	Protocol     config.Protocol `json:"protocol"`
+	Listen       string          `json:"listen"`
+	TargetName   string          `json:"target_name"`
+	EndpointName string          `json:"endpoint_name"`
+	ProxyAddress string          `json:"proxyaddress"`
 }
