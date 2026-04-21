@@ -1,9 +1,7 @@
 package method
 
 // PluginInitRequest is sent by the host to initialize a plugin process.
-type PluginInitRequest struct {
-	Options map[string]any `json:"options,omitempty"`
-}
+type PluginInitRequest struct{}
 
 func (PluginInitRequest) Method() uint16 {
 	return MethodPluginInitRequest
