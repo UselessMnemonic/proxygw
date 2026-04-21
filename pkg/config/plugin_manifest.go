@@ -1,7 +1,8 @@
 package config
 
 type PluginManifest struct {
-	Entry     string
+	Cmd       string
+	Args      []string
 	Codec     string
 	Frontends []string
 	Targets   []string
