@@ -5,7 +5,8 @@ import (
 	"proxygw/pkg/config"
 )
 
+// Kind identifies a frontend implementation and constructs drivers for named listeners.
 type Kind interface {
 	Name() string
-	New(string, config.Protocol, netip.AddrPort, map[string]any) (Driver, error)
+	New(name string, protocol config.Protocol, port netip.AddrPort, options map[string]any) (Driver, error)
 }
