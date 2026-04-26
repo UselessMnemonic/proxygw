@@ -3,8 +3,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"proxygw/pkg/ipc"
-	"proxygw/pkg/ipc/method"
+	"proxygw/plugin/ctl/ipc"
+	"proxygw/plugin/ctl/ipc/method"
 )
 
 type Client struct {

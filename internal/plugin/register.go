@@ -2,9 +2,9 @@ package plugin
 
 import (
 	"fmt"
-	"proxygw/internal/engine"
-	"proxygw/internal/frontend"
-	"proxygw/internal/target"
+	"proxygw/pkg/engine"
+	"proxygw/pkg/frontend"
+	"proxygw/pkg/target"
 	"sync"
 )
 

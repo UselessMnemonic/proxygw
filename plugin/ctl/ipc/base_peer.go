@@ -2,8 +2,8 @@ package ipc
 
 import (
 	"errors"
-	"proxygw/pkg/ipc/codec"
-	"proxygw/pkg/ipc/method"
+	"proxygw/plugin/ctl/ipc/codec"
+	"proxygw/plugin/ctl/ipc/method"
 	"sync"
 )
 

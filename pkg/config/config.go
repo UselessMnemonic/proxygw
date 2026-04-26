@@ -10,11 +10,10 @@ const ConfigVersionV1 = "v1"
 
 // Config is the root runtime configuration document.
 type Config struct {
-	Version   string     `yaml:"version"`
-	Socket    string     `yaml:"socket"`
-	Plugins   []string   `yaml:"plugins"`
-	Targets   []Target   `yaml:"targets"`
-	Frontends []Frontend `yaml:"frontends"`
+	Version   string                    `yaml:"version"`
+	Plugins   map[string]map[string]any `yaml:"plugins"`
+	Targets   []Target                  `yaml:"targets"`
+	Frontends []Frontend                `yaml:"frontends"`
 }
 
 // Validate checks that the configuration is internally consistent and usable.
@@ -24,10 +23,6 @@ func (c *Config) Validate() error {
 	}
 	if c.Version != ConfigVersionV1 {
 		return fmt.Errorf("unsupported version %q", c.Version)
-	}
-
-	if c.Socket == "" {
-		return errors.New("socket is required")
 	}
 
 	for i, target := range c.Targets {

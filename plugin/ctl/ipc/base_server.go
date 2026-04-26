@@ -2,7 +2,7 @@ package ipc
 
 import (
 	"errors"
-	"proxygw/pkg/ipc/method"
+	"proxygw/plugin/ctl/ipc/method"
 	"sync"
 )
 

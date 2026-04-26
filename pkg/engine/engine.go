@@ -5,20 +5,20 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"proxygw/internal/dataplane"
-	frontend2 "proxygw/internal/frontend"
-	target2 "proxygw/internal/target"
 	"proxygw/pkg/config"
+	"proxygw/pkg/dataplane"
+	"proxygw/pkg/frontend"
+	"proxygw/pkg/target"
 	"slices"
 	"sync"
 )
 
 type Engine struct {
 	dplane        *dataplane.Dataplane
-	frontends     map[string]*frontend2.Frontend
-	frontendCtors map[string]frontend2.HandlerCtor
-	targets       map[string]*target2.Target
-	targetCtors   map[string]target2.HandlerCtor
+	frontends     map[string]*frontend.Frontend
+	frontendCtors map[string]frontend.HandlerCtor
+	targets       map[string]*target.Target
+	targetCtors   map[string]target.HandlerCtor
 
 	wg     sync.WaitGroup
 	lock   sync.RWMutex
@@ -38,10 +38,10 @@ func New(ctx context.Context) (*Engine, error) {
 
 	e := &Engine{
 		dplane:        plane,
-		frontends:     make(map[string]*frontend2.Frontend),
-		frontendCtors: make(map[string]frontend2.HandlerCtor),
-		targets:       make(map[string]*target2.Target),
-		targetCtors:   make(map[string]target2.HandlerCtor),
+		frontends:     make(map[string]*frontend.Frontend),
+		frontendCtors: make(map[string]frontend.HandlerCtor),
+		targets:       make(map[string]*target.Target),
+		targetCtors:   make(map[string]target.HandlerCtor),
 
 		lock:   sync.RWMutex{},
 		wg:     sync.WaitGroup{},
@@ -72,7 +72,7 @@ func (e *Engine) Closed() bool {
 	return e.closed
 }
 
-func (e *Engine) AddFrontendKind(name string, kind frontend2.HandlerCtor) error {
+func (e *Engine) AddFrontendKind(name string, kind frontend.HandlerCtor) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	if e.closed {
@@ -87,13 +87,13 @@ func (e *Engine) AddFrontendKind(name string, kind frontend2.HandlerCtor) error 
 	return nil
 }
 
-func (e *Engine) FrontendKind(name string) frontend2.HandlerCtor {
+func (e *Engine) FrontendKind(name string) frontend.HandlerCtor {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.frontendCtors[name]
 }
 
-func (e *Engine) FrontendKinds() []frontend2.HandlerCtor {
+func (e *Engine) FrontendKinds() []frontend.HandlerCtor {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return slices.Collect(maps.Values(e.frontendCtors))
@@ -111,7 +111,7 @@ func (e *Engine) DelFrontendKind(name string) error {
 		return ErrFrontendKindNotRegistered
 	}
 	for _, f := range e.frontends {
-		if f.State() == frontend2.Closed {
+		if f.State() == frontend.Closed {
 			continue
 		}
 	}
@@ -119,7 +119,7 @@ func (e *Engine) DelFrontendKind(name string) error {
 	return nil
 }
 
-func (e *Engine) AddTargetKind(name string, kind target2.HandlerCtor) error {
+func (e *Engine) AddTargetKind(name string, kind target.HandlerCtor) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	if e.closed {
@@ -134,13 +134,13 @@ func (e *Engine) AddTargetKind(name string, kind target2.HandlerCtor) error {
 	return nil
 }
 
-func (e *Engine) GetTargetKind(name string) target2.HandlerCtor {
+func (e *Engine) GetTargetKind(name string) target.HandlerCtor {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.targetCtors[name]
 }
 
-func (e *Engine) TargetKinds() []target2.HandlerCtor {
+func (e *Engine) TargetKinds() []target.HandlerCtor {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return slices.Collect(maps.Values(e.targetCtors))
@@ -158,7 +158,7 @@ func (e *Engine) DelTargetKind(name string) error {
 		return ErrTargetKindNotRegistered
 	}
 	for _, t := range e.targets {
-		if t.State() == target2.Closed {
+		if t.State() == target.Closed {
 			continue
 		}
 	}
@@ -166,7 +166,7 @@ func (e *Engine) DelTargetKind(name string) error {
 	return nil
 }
 
-func (e *Engine) NewTarget(cfg config.Target) (*target2.Target, error) {
+func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	if e.closed {
@@ -193,7 +193,7 @@ func (e *Engine) NewTarget(cfg config.Target) (*target2.Target, error) {
 		return nil, fmt.Errorf("flow group: %w", err)
 	}
 
-	t, err := target2.New(e.ctx, dnat, driver, cfg)
+	t, err := target.New(e.ctx, dnat, driver, cfg)
 	if err != nil {
 		return nil, errors.Join(
 			err,
@@ -207,13 +207,13 @@ func (e *Engine) NewTarget(cfg config.Target) (*target2.Target, error) {
 	return t, nil
 }
 
-func (e *Engine) GetTarget(name string) *target2.Target {
+func (e *Engine) GetTarget(name string) *target.Target {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.targets[name]
 }
 
-func (e *Engine) Targets() []*target2.Target {
+func (e *Engine) Targets() []*target.Target {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return slices.Collect(maps.Values(e.targets))
@@ -230,14 +230,14 @@ func (e *Engine) DelTarget(name string) error {
 	if !exists {
 		return nil
 	}
-	if t.State() != target2.Closed {
+	if t.State() != target.Closed {
 		return ErrTargetInUse
 	}
 	delete(e.targets, name)
 	return nil
 }
 
-func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend2.Frontend, error) {
+func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	if e.closed {
@@ -254,7 +254,7 @@ func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend2.Frontend, error) {
 		return nil, fmt.Errorf("lookup target %q: %w", cfg.Endpoint.TargetName, ErrTargetNotRegistered)
 	}
 
-	if t.State() == target2.Closed {
+	if t.State() == target.Closed {
 		return nil, fmt.Errorf("lookup target %q: %w", cfg.Endpoint.TargetName, ErrTargetNotRegistered)
 	}
 
@@ -273,7 +273,7 @@ func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend2.Frontend, error) {
 		return nil, fmt.Errorf("endpoint %q does not exist in target %q", cfg.Endpoint.EndpointName, cfg.Endpoint.TargetName)
 	}
 
-	f, err := frontend2.New(e.ctx, t, endpoint, driver, cfg)
+	f, err := frontend.New(e.ctx, t, endpoint, driver, cfg)
 	if err != nil {
 		return nil, errors.Join(
 			err,
@@ -286,13 +286,13 @@ func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend2.Frontend, error) {
 	return f, nil
 }
 
-func (e *Engine) GetFrontend(name string) *frontend2.Frontend {
+func (e *Engine) GetFrontend(name string) *frontend.Frontend {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.frontends[name]
 }
 
-func (e *Engine) Frontends() []*frontend2.Frontend {
+func (e *Engine) Frontends() []*frontend.Frontend {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return slices.Collect(maps.Values(e.frontends))
@@ -309,21 +309,21 @@ func (e *Engine) DelFrontend(name string) error {
 	if !exists {
 		return nil
 	}
-	if f.State() != frontend2.Closed {
+	if f.State() != frontend.Closed {
 		return ErrFrontendInUse
 	}
 	delete(e.frontends, name)
 	return nil
 }
 
-func (e *Engine) joinTarget(t *target2.Target) {
+func (e *Engine) joinTarget(t *target.Target) {
 	e.wg.Go(func() {
 		t.Wait() // target guaranteed to be closed
 		// TODO: Should we leave the dead weight or remove the target immediately ?
 	})
 }
 
-func (e *Engine) joinFrontend(f *frontend2.Frontend) {
+func (e *Engine) joinFrontend(f *frontend.Frontend) {
 	e.wg.Go(func() {
 		f.Wait() // target guaranteed to be closed
 		// TODO: Should we leave the dead weight or remove the frontend immediately ?

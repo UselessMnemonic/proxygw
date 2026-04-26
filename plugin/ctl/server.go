@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"proxygw/internal/engine"
-	"proxygw/internal/frontend"
-	target2 "proxygw/internal/target"
-	"proxygw/pkg/ipc"
-	"proxygw/pkg/ipc/method"
+	"proxygw/pkg/engine"
+	"proxygw/pkg/frontend"
+	"proxygw/pkg/target"
+	"proxygw/plugin/ctl/ipc"
+	"proxygw/plugin/ctl/ipc/method"
 	"slices"
 )
 
@@ -69,7 +69,7 @@ func (s *Server) statusResponse() method.StatusResponse {
 	}
 
 	targets := s.engine.Targets()
-	slices.SortFunc(targets, func(a, b *target2.Target) int {
+	slices.SortFunc(targets, func(a, b *target.Target) int {
 		switch {
 		case a.Name() < b.Name():
 			return -1
@@ -91,7 +91,7 @@ func (s *Server) statusResponse() method.StatusResponse {
 		}
 
 		endpoints := t.Endpoints()
-		slices.SortFunc(endpoints, func(a, b target2.Endpoint) int {
+		slices.SortFunc(endpoints, func(a, b target.Endpoint) int {
 			switch {
 			case a.Name < b.Name:
 				return -1

@@ -2,7 +2,7 @@ package ipc
 
 import (
 	"net"
-	"proxygw/pkg/ipc/codec"
+	"proxygw/plugin/ctl/ipc/codec"
 )
 
 // Listener implements a base listener type for accepting IPC peers

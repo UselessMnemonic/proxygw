@@ -1,7 +1,7 @@
 package static
 
 import (
-	"proxygw/internal/engine"
+	"proxygw/pkg/engine"
 	"proxygw/plugin"
 	"proxygw/plugin/static/frontends"
 	"proxygw/plugin/static/targets"

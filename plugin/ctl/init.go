@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"proxygw/internal/engine"
-	"proxygw/pkg/ipc"
-	"proxygw/pkg/ipc/codec"
+	"proxygw/pkg/engine"
 	"proxygw/plugin"
+	"proxygw/plugin/ctl/ipc"
+	"proxygw/plugin/ctl/ipc/codec"
 )
 
 var ctx context.Context

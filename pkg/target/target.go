@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"proxygw/internal/dataplane"
 	"proxygw/pkg/config"
+	"proxygw/pkg/dataplane"
 	"slices"
 	"sync"
 )

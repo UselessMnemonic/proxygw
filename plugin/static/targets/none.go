@@ -1,7 +1,7 @@
 package targets
 
 import (
-	"proxygw/internal/target"
+	"proxygw/pkg/target"
 )
 
 type NoneHandler struct{}

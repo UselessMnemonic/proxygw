@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"proxygw/internal/dataplane"
-	target2 "proxygw/internal/target"
 	"proxygw/pkg/config"
+	"proxygw/pkg/dataplane"
+	"proxygw/pkg/target"
 	"sync"
 )
 
@@ -15,8 +15,8 @@ type Frontend struct {
 	kind    string
 	handler Handler
 
-	target   *target2.Target
-	endpoint target2.Endpoint
+	target   *target.Target
+	endpoint target.Endpoint
 	requests chan State
 	mapping  dataplane.DNATMapping
 
@@ -28,7 +28,7 @@ type Frontend struct {
 	state  State
 }
 
-func New(ctx context.Context, target *target2.Target, endpoint target2.Endpoint, handler Handler, cfg config.Frontend) (*Frontend, error) {
+func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, handler Handler, cfg config.Frontend) (*Frontend, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
 	}
@@ -81,11 +81,11 @@ func (f *Frontend) Kind() string {
 	return f.kind
 }
 
-func (f *Frontend) Target() *target2.Target {
+func (f *Frontend) Target() *target.Target {
 	return f.target
 }
 
-func (f *Frontend) Endpoint() target2.Endpoint {
+func (f *Frontend) Endpoint() target.Endpoint {
 	return f.endpoint
 }
 

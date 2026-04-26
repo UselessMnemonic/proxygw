@@ -2,7 +2,7 @@ package ipc
 
 import (
 	"net"
-	"proxygw/pkg/ipc/codec"
+	"proxygw/plugin/ctl/ipc/codec"
 	"time"
 )
 

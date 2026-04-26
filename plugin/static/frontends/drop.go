@@ -2,13 +2,17 @@ package frontends
 
 import (
 	"net/netip"
-	"proxygw/internal/frontend"
 	"proxygw/pkg/config"
+	"proxygw/pkg/frontend"
 )
 
 type DropHandler chan struct{}
 
 func (DropHandler) Start() error {
+	return nil
+}
+
+func (d DropHandler) Stop() error {
 	return nil
 }
 
