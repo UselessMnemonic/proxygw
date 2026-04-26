@@ -10,6 +10,8 @@ require golang.org/x/sys v0.43.0
 
 require github.com/fxamacker/cbor/v2 v2.9.1
 
+require gopkg.in/yaml.v3 v3.0.1
+
 require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/mdlayher/netlink v1.11.1 // indirect
