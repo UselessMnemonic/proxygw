@@ -1,6 +1,8 @@
 package method
 
-import "proxygw/pkg/config"
+import (
+	"proxygw/pkg/config"
+)
 
 // StatusRequest asks the proxy engine for status details.
 type StatusRequest struct{}

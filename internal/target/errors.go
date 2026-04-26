@@ -1,5 +1,6 @@
 package target
 
-import "fmt"
+import "errors"
 
-var ErrClosed = fmt.Errorf("target closed")
+// ErrClosed means a target has been closed.
+var ErrClosed = errors.New("target closed")

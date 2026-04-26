@@ -1,6 +1,8 @@
 package method
 
-import "proxygw/pkg/config"
+import (
+	"proxygw/pkg/config"
+)
 
 // NewFrontendRequest asks the plugin to construct a frontend driver instance.
 type NewFrontendRequest struct {

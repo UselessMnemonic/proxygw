@@ -1,11 +1,12 @@
-package cli
+package ctl
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"proxygw/internal/engine"
 	"proxygw/internal/frontend"
-	"proxygw/internal/target"
+	target2 "proxygw/internal/target"
 	"proxygw/pkg/ipc"
 	"proxygw/pkg/ipc/method"
 	"slices"
@@ -16,8 +17,8 @@ type Server struct {
 	engine *engine.Engine
 }
 
-func NewServer(conn *ipc.Conn, eng *engine.Engine) *Server {
-	if eng == nil {
+func NewServer(conn *ipc.Conn, engine *engine.Engine) *Server {
+	if engine == nil {
 		panic("engine must not be nil")
 	}
 	if conn == nil {
@@ -25,18 +26,17 @@ func NewServer(conn *ipc.Conn, eng *engine.Engine) *Server {
 	}
 	s := &Server{
 		BaseServer: ipc.NewBaseServer(conn),
-		engine:     eng,
+		engine:     engine,
 	}
 	return s
 }
 
-func (s *Server) Close() error {
-	return s.BaseServer.Close()
-}
-
-func (s *Server) Serve() error {
+func (s *Server) Serve(ctx context.Context) error {
 	for {
 		select {
+		case <-ctx.Done():
+			s.BaseServer.Close()
+			return net.ErrClosed
 		case req, ok := <-s.Requests():
 			if !ok {
 				return net.ErrClosed
@@ -69,7 +69,7 @@ func (s *Server) statusResponse() method.StatusResponse {
 	}
 
 	targets := s.engine.Targets()
-	slices.SortFunc(targets, func(a, b *target.Target) int {
+	slices.SortFunc(targets, func(a, b *target2.Target) int {
 		switch {
 		case a.Name() < b.Name():
 			return -1
@@ -83,7 +83,7 @@ func (s *Server) statusResponse() method.StatusResponse {
 	for _, t := range targets {
 		targetStatus := method.TargetStatus{
 			Name:  t.Name(),
-			Kind:  t.Kind().Name(),
+			Kind:  t.Kind(),
 			State: t.State().String(),
 		}
 		if err := t.Error(); err != nil {
@@ -91,7 +91,7 @@ func (s *Server) statusResponse() method.StatusResponse {
 		}
 
 		endpoints := t.Endpoints()
-		slices.SortFunc(endpoints, func(a, b target.Endpoint) int {
+		slices.SortFunc(endpoints, func(a, b target2.Endpoint) int {
 			switch {
 			case a.Name < b.Name:
 				return -1
@@ -129,7 +129,7 @@ func (s *Server) statusResponse() method.StatusResponse {
 		endpoint := f.Endpoint()
 		frontendStatus := method.FrontendStatus{
 			Name:         f.Name(),
-			Kind:         f.Kind().Name(),
+			Kind:         f.Kind(),
 			State:        f.State().String(),
 			Protocol:     f.Protocol(),
 			Listen:       f.Listen(),

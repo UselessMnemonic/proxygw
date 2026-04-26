@@ -5,16 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"proxygw/internal/dataplane"
-	"proxygw/internal/target"
+	target2 "proxygw/internal/target"
 	"proxygw/pkg/config"
 	"sync"
 )
 
 type Frontend struct {
-	name     string
-	target   *target.Target
-	endpoint target.Endpoint
-	driver   Driver
+	name    string
+	kind    string
+	handler Handler
+
+	target   *target2.Target
+	endpoint target2.Endpoint
 	requests chan State
 	mapping  dataplane.DNATMapping
 
@@ -26,18 +28,15 @@ type Frontend struct {
 	state  State
 }
 
-func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, driver Driver, cfg config.Frontend) (*Frontend, error) {
+func New(ctx context.Context, target *target2.Target, endpoint target2.Endpoint, handler Handler, cfg config.Frontend) (*Frontend, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
 	}
 	if target == nil {
 		return nil, errors.New("target is nil")
 	}
-	if driver == nil {
-		return nil, errors.New("driver is nil")
-	}
-	if cfg.Protocol != endpoint.Protocol {
-		return nil, fmt.Errorf("invalid endpoint protocol %s, expected %s", cfg.Protocol, endpoint.Protocol)
+	if handler == nil {
+		return nil, errors.New("handler is nil")
 	}
 
 	mapping := dataplane.DNATMapping{
@@ -54,10 +53,12 @@ func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, d
 
 	ctx, cancel := context.WithCancel(ctx)
 	f := &Frontend{
-		name:     cfg.Name,
+		name:    cfg.Name,
+		kind:    cfg.Kind,
+		handler: handler,
+
 		target:   target,
 		endpoint: endpoint,
-		driver:   driver,
 		requests: make(chan State, 1),
 		mapping:  mapping,
 
@@ -76,15 +77,15 @@ func (f *Frontend) Name() string {
 	return f.name
 }
 
-func (f *Frontend) Kind() Kind {
-	return f.driver.Kind()
+func (f *Frontend) Kind() string {
+	return f.kind
 }
 
-func (f *Frontend) Target() *target.Target {
+func (f *Frontend) Target() *target2.Target {
 	return f.target
 }
 
-func (f *Frontend) Endpoint() target.Endpoint {
+func (f *Frontend) Endpoint() target2.Endpoint {
 	return f.endpoint
 }
 
@@ -158,7 +159,7 @@ func (f *Frontend) Stop() bool {
 }
 
 func (f *Frontend) tryStart() {
-	err := f.driver.Start()
+	err := f.handler.Start()
 
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -173,7 +174,7 @@ func (f *Frontend) tryStart() {
 }
 
 func (f *Frontend) tryStop() {
-	err := f.driver.Stop()
+	err := f.handler.Stop()
 
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -190,9 +191,11 @@ func (f *Frontend) tryStop() {
 func (f *Frontend) end() {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-	f.err = f.target.DNATGroup().DelMappings(f.mapping)
 	f.state = Closed
-	f.driver.Close()
+	f.err = errors.Join(
+		f.target.DNATGroup().DelMappings(f.mapping),
+		f.handler.Close(),
+	)
 }
 
 func (f *Frontend) start() {
@@ -202,7 +205,7 @@ func (f *Frontend) start() {
 			select {
 			case <-f.ctx.Done():
 				return
-			case <-f.driver.ShouldWarm():
+			case <-f.handler.ShouldWarm():
 				f.target.Warm()
 			case next := <-f.requests:
 				switch next {

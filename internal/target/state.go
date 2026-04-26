@@ -1,16 +1,16 @@
 package target
 
-// State describes target activation lifecycle.
+// State describes the target lifecycle.
 type State int32
 
 const (
-	// Inactive means the target is not accepting forwarded traffic.
+	// Inactive means the target is not accepting traffic.
 	Inactive State = 1
-	// Active means the target is actively serving forwarded traffic.
+	// Active means the target is actively accepting traffic.
 	Active State = 2
-	// Warming means activation is in progress.
+	// Warming means the target is being prepared to accept traffic.
 	Warming State = 3
-	// Draining means deactivation is in progress.
+	// Draining means the target is being taken down to stop accepting traffic.
 	Draining State = 4
 	// Closed means the target is no longer valid.
 	Closed State = 6

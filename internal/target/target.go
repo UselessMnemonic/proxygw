@@ -12,9 +12,11 @@ import (
 )
 
 type Target struct {
-	name      string
-	driver    Driver
-	dnatGroup *dataplane.DNATGroup
+	name    string
+	kind    string
+	handler Handler
+
+	dnat      *dataplane.DNATGroup
 	requests  chan State
 	endpoints map[string]Endpoint
 
@@ -26,31 +28,37 @@ type Target struct {
 	state  State
 }
 
-func New(ctx context.Context, dnatGroup *dataplane.DNATGroup, driver Driver, cfg config.Target) (*Target, error) {
+func New(ctx context.Context, dnat *dataplane.DNATGroup, handler Handler, cfg config.Target) (*Target, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
 	}
-	if dnatGroup == nil {
-		return nil, errors.New("flowGroup is nil")
+	if dnat == nil {
+		return nil, errors.New("dnat is nil")
 	}
-	if driver == nil {
-		return nil, errors.New("driver is nil")
+	if handler == nil {
+		return nil, errors.New("handler is nil")
 	}
 
 	endpoints := make(map[string]Endpoint, len(cfg.Endpoints))
 	for _, epCfg := range cfg.Endpoints {
-		endpoints[epCfg.Name] = Endpoint{
+		next := Endpoint{
 			Name:     epCfg.Name,
 			Address:  epCfg.Address,
 			Protocol: epCfg.Protocol,
 		}
+		if !next.IsValid() {
+			return nil, fmt.Errorf("invalid endpoint: %v", next)
+		}
+		endpoints[next.Name] = next
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	t := &Target{
-		name:      cfg.Name,
-		driver:    driver,
-		dnatGroup: dnatGroup,
+		name:    cfg.Name,
+		kind:    cfg.Kind,
+		handler: handler,
+
+		dnat:      dnat,
 		requests:  make(chan State, 1),
 		endpoints: endpoints,
 
@@ -69,12 +77,12 @@ func (t *Target) Name() string {
 	return t.name
 }
 
-func (t *Target) Kind() Kind {
-	return t.driver.Kind()
+func (t *Target) Kind() string {
+	return t.kind
 }
 
 func (t *Target) DNATGroup() *dataplane.DNATGroup {
-	return t.dnatGroup
+	return t.dnat
 }
 
 func (t *Target) State() State {
@@ -180,7 +188,7 @@ func (t *Target) Wait() {
 }
 
 func (t *Target) tryWarm() {
-	err := t.driver.Warm()
+	err := t.handler.Warm()
 
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -194,7 +202,7 @@ func (t *Target) tryWarm() {
 	t.state = Active
 
 	// try to enable DNAT
-	err = t.dnatGroup.Enable()
+	err = t.dnat.Enable()
 	if err != nil {
 		t.err = fmt.Errorf("failed to enable DNAT: %w", err)
 		return
@@ -202,7 +210,7 @@ func (t *Target) tryWarm() {
 }
 
 func (t *Target) tryDrain() {
-	err := t.driver.Drain()
+	err := t.handler.Drain()
 
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -216,7 +224,7 @@ func (t *Target) tryDrain() {
 	t.state = Inactive
 
 	// try to disable DNAT
-	err = t.dnatGroup.Disable()
+	err = t.dnat.Disable()
 	if err != nil {
 		t.err = fmt.Errorf("failed to disable DNAT: %w", err)
 		return
@@ -227,8 +235,10 @@ func (t *Target) end() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	t.state = Closed
-	t.err = t.dnatGroup.Close()
-	t.driver.Close()
+	t.err = errors.Join(
+		t.dnat.Close(),
+		t.handler.Close(),
+	)
 }
 
 func (t *Target) start() {

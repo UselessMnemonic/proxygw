@@ -6,7 +6,7 @@ type State int32
 const (
 	// Stopped indicates the frontend is not accepting traffic.
 	Stopped State = 1
-	// Starting indicates the frontend is preparing to accept traffic
+	// Starting indicates the frontend is preparing to accept traffic.
 	Starting State = 2
 	// Running indicates the frontend is actively listening.
 	Running State = 3
