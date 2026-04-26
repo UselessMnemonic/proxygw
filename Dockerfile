@@ -1,9 +1,9 @@
 FROM archlinux:latest AS base
 
-RUN pacman -Syu --noconfirm go=2:1.25.0-1 \
-    && pacman -Scc --noconfirm
+RUN pacman -Syu --noconfirm go && pacman -Scc --noconfirm
+ENV GOROOT=/usr/lib/go
 
 FROM base AS devcontainer
 
-RUN pacman -Syu --noconfirm nftables \
+RUN pacman -Syu --noconfirm nftables git make \
     && pacman -Scc --noconfirm
