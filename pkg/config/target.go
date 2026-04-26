@@ -28,11 +28,11 @@ type TargetEndpointReference struct {
 }
 
 func (e TargetEndpointReference) MarshalText() ([]byte, error) {
-	return []byte(fmt.Sprintf("%s/%s", e.TargetName, e.EndpointName)), nil
+	return []byte(fmt.Sprintf("%s:%s", e.TargetName, e.EndpointName)), nil
 }
 
 func (e *TargetEndpointReference) UnmarshalText(text []byte) error {
-	parts := strings.Split(string(text), "/")
+	parts := strings.Split(string(text), ":")
 	if len(parts) != 2 {
 		return fmt.Errorf("invalid endpoint reference: %q", text)
 	}
