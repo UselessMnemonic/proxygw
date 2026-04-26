@@ -30,6 +30,9 @@ $defs:
     enum:
       - tcp
       - udp
+  namespace_ref:
+    type: string
+    pattern: '^[^:]+:[^:]+$'
   ttl:
     type: string
     description: Go duration string, serialized as text and parsed by time.ParseDuration.
@@ -38,10 +41,6 @@ $defs:
     type: string
     description: IP address and port in Go netip.AddrPort text form.
     minLength: 1
-  endpoint_ref:
-    type: string
-    description: Reference to a target endpoint in target_name:endpoint_name form.
-    pattern: '^[^:]+:[^:]+$'
   target_endpoint:
     type: object
     additionalProperties: false
@@ -70,8 +69,7 @@ $defs:
         type: string
         minLength: 1
       kind:
-        type: string
-        minLength: 1
+        $ref: "#/$defs/namespace_ref"
       idle_timeout:
         $ref: "#/$defs/ttl"
       endpoints:
@@ -96,8 +94,7 @@ $defs:
         type: string
         minLength: 1
       kind:
-        type: string
-        minLength: 1
+        $ref: "#/$defs/namespace_ref"
       protocol:
         $ref: "#/$defs/protocol"
       listen:
@@ -105,6 +102,6 @@ $defs:
       flow_timeout:
         $ref: "#/$defs/ttl"
       target:
-        $ref: "#/$defs/endpoint_ref"
+        $ref: "#/$defs/namespace_ref"
       options:
         type: object

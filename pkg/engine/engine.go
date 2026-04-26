@@ -178,7 +178,7 @@ func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 		return nil, ErrTargetAlreadyRegistered
 	}
 
-	factory := e.targetCtors[cfg.Kind]
+	factory := e.targetCtors[cfg.Kind.String()]
 	if factory == nil {
 		return nil, fmt.Errorf("lookup kind %q: %w", cfg.Kind, ErrTargetKindNotRegistered)
 	}
@@ -249,16 +249,16 @@ func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 		return nil, ErrFrontendAlreadyRegistered
 	}
 
-	t := e.targets[cfg.Endpoint.TargetName]
+	t := e.targets[cfg.Endpoint.Namespace]
 	if t == nil {
-		return nil, fmt.Errorf("lookup target %q: %w", cfg.Endpoint.TargetName, ErrTargetNotRegistered)
+		return nil, fmt.Errorf("lookup target %q: %w", cfg.Endpoint.Namespace, ErrTargetNotRegistered)
 	}
 
 	if t.State() == target.Closed {
-		return nil, fmt.Errorf("lookup target %q: %w", cfg.Endpoint.TargetName, ErrTargetNotRegistered)
+		return nil, fmt.Errorf("lookup target %q: %w", cfg.Endpoint.Namespace, ErrTargetNotRegistered)
 	}
 
-	ctor := e.frontendCtors[cfg.Kind]
+	ctor := e.frontendCtors[cfg.Kind.String()]
 	if ctor == nil {
 		return nil, fmt.Errorf("frontend kind %q: %w", cfg.Kind, ErrFrontendKindNotRegistered)
 	}
@@ -268,9 +268,9 @@ func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 		return nil, fmt.Errorf("driver for kind %q: %w", cfg.Kind, err)
 	}
 
-	endpoint, exists := t.Endpoint(cfg.Endpoint.EndpointName)
+	endpoint, exists := t.Endpoint(cfg.Endpoint.Name)
 	if !exists {
-		return nil, fmt.Errorf("endpoint %q does not exist in target %q", cfg.Endpoint.EndpointName, cfg.Endpoint.TargetName)
+		return nil, fmt.Errorf("endpoint %q does not exist in target %q", cfg.Endpoint.Name, cfg.Endpoint.Namespace)
 	}
 
 	f, err := frontend.New(e.ctx, t, endpoint, driver, cfg)

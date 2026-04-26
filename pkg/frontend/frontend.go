@@ -54,7 +54,7 @@ func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, h
 	ctx, cancel := context.WithCancel(ctx)
 	f := &Frontend{
 		name:    cfg.Name,
-		kind:    cfg.Kind,
+		kind:    cfg.Kind.String(),
 		handler: handler,
 
 		target:   target,

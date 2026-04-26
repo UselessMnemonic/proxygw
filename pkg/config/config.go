@@ -34,9 +34,6 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("targets[%d] redefines %q", i, target.Name)
 			}
 		}
-		if target.Kind == "" {
-			return fmt.Errorf("targets[%q].kind is required", target.Name)
-		}
 		if len(target.Endpoints) == 0 {
 			return fmt.Errorf("targets[%q].endpoints must contain at least one element", target.Name)
 		}
@@ -70,9 +67,6 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("frontends[%d] redefines %q", i, frontend.Name)
 			}
 		}
-		if frontend.Kind == "" {
-			return fmt.Errorf("frontends[%q].kind is required", frontend.Name)
-		}
 		if !frontend.Protocol.IsValid() {
 			return fmt.Errorf("frontends[%q].protocol is invalid", frontend.Name)
 		}
@@ -82,10 +76,10 @@ func (c *Config) Validate() error {
 		if frontend.FlowTimeout == 0 {
 			return fmt.Errorf("frontends[%q].flow_timeout cannot be zero", frontend.Name)
 		}
-		if frontend.Endpoint.TargetName == "" {
+		if frontend.Endpoint.Namespace == "" {
 			return fmt.Errorf("frontends[%q].endpoint.target_name is required", frontend.Name)
 		}
-		if frontend.Endpoint.EndpointName == "" {
+		if frontend.Endpoint.Name == "" {
 			return fmt.Errorf("frontends[%q].endpoint.endpoint_name is required", frontend.Name)
 		}
 	}

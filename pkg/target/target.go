@@ -55,7 +55,7 @@ func New(ctx context.Context, dnat *dataplane.DNATGroup, handler Handler, cfg co
 	ctx, cancel := context.WithCancel(ctx)
 	t := &Target{
 		name:    cfg.Name,
-		kind:    cfg.Kind,
+		kind:    cfg.Kind.String(),
 		handler: handler,
 
 		dnat:      dnat,
