@@ -1,0 +1,12 @@
+services:
+  workspace:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: devcontainer
+    command: sleep infinity
+    working_dir: /workspaces/proxy-gateway
+    volumes:
+      - ..:/workspaces/proxy-gateway:Z
+    cap_add:
+      - NET_ADMIN
