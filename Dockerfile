@@ -5,5 +5,5 @@ ENV GOROOT=/usr/lib/go
 
 FROM base AS devcontainer
 
-RUN pacman -Syu --noconfirm nftables git make \
+RUN pacman -Syu --noconfirm openssh git nftables make \
     && pacman -Scc --noconfirm
