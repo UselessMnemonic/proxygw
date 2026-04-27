@@ -59,6 +59,7 @@ func (c *Conn) Write(p *Packet) error {
 func (c *Conn) Read() (Packet, error) {
 	p := Packet{0, 0, c.codec.Raw()}
 	err := c.dec.Decode(&p)
+	p.Body = c.codec.UnwrapRaw(p.Body)
 	return p, err
 }
 

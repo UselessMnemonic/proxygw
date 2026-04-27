@@ -28,5 +28,9 @@ func (cborCodec) Unmarshal(data []byte, v any) error {
 }
 
 func (cborCodec) Raw() any {
-	return cbor.RawMessage{}
+	return &cbor.RawMessage{}
+}
+
+func (cborCodec) UnwrapRaw(v any) []byte {
+	return *v.(*cbor.RawMessage)
 }

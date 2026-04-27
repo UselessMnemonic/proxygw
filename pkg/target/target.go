@@ -257,6 +257,12 @@ func (t *Target) start() {
 				default:
 					continue
 				}
+			case timeout := <-t.dnat.Timeout():
+				go func() {
+					// TODO log this event
+					_ = timeout
+					t.Drain()
+				}()
 			}
 		}
 	})

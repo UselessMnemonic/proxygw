@@ -27,5 +27,9 @@ func (jsonCodec) Unmarshal(data []byte, v any) error {
 }
 
 func (jsonCodec) Raw() any {
-	return json.RawMessage{}
+	return &json.RawMessage{}
+}
+
+func (jsonCodec) UnwrapRaw(v any) []byte {
+	return *v.(*json.RawMessage)
 }

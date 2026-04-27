@@ -27,6 +27,8 @@ type Codec interface {
 	Unmarshal([]byte, any) error
 	// Raw returns the codec's raw message type, interchangeable with []byte
 	Raw() any
+	// UnwrapRaw extracts the raw byte representation from the codec's raw message type
+	UnwrapRaw(any) []byte
 }
 
 func FindByName(name string) Codec {
