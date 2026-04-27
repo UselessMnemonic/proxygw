@@ -22,15 +22,20 @@ func (d *Dataplane) start() {
 
 	// generates filter events
 	d.wg.Go(func() {
+		d.logger.Info("dataplane conntrack watchdog started", "table", d.name, "period", conntrackWatchdogPeriod)
 		filter := conntrack.NewFilter().Status(conntrack.StatusDstNATDone)
 		ticker := time.NewTicker(conntrackWatchdogPeriod)
-		defer ticker.Stop()
-		defer close(filterChan)
+		defer func() {
+			ticker.Stop()
+			close(filterChan)
+			d.logger.Info("dataplane conntrack watchdog stopped", "table", d.name)
+		}()
 		for {
 			select {
 			case <-d.ctx.Done():
 				return
 			case timestamp := <-ticker.C:
+				d.logger.Info("dataplane conntrack watchdog tick", "table", d.name, "timestamp", timestamp)
 				flows, err := d.ct.DumpFilter(filter, nil)
 				result := ctFilterResult{make([]netip.AddrPort, 0, len(flows)), err, timestamp}
 				if err == nil {
@@ -55,7 +60,11 @@ func (d *Dataplane) start() {
 
 	// process filter events
 	d.wg.Go(func() {
-		defer d.teardown()
+		d.logger.Info("dataplane event processor started", "table", d.name)
+		defer func() {
+			d.teardown()
+			d.logger.Info("dataplane event processor stopped", "table", d.name, "err", d.Error())
+		}()
 		for {
 			select {
 			case <-d.ctx.Done():
@@ -87,6 +96,7 @@ func (d *Dataplane) processResult(result ctFilterResult) {
 	defer d.lock.Unlock()
 	if result.err != nil {
 		d.err = result.err
+		d.logger.Error("dataplane conntrack watchdog failed", "table", d.name, "err", result.err)
 		return
 	}
 
@@ -112,6 +122,14 @@ func (d *Dataplane) processResult(result ctFilterResult) {
 	// for the groups we did not see this round, possibly send timeout event
 	for _, group := range notSeen {
 		if result.timestamp.Sub(group.lastSeen) >= group.ttl.ToDuration() {
+			d.logger.Info(
+				"dataplane timeout candidate detected",
+				"table", d.name,
+				"group", group.name,
+				"idle_for", result.timestamp.Sub(group.lastSeen),
+				"ttl", group.ttl.ToDuration(),
+				"timestamp", result.timestamp,
+			)
 			group.timeouts <- DNATGroupTimeoutEvent{result.timestamp}
 		}
 	}

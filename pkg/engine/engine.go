@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"proxygw/pkg/config"
 	"proxygw/pkg/dataplane"
@@ -19,6 +20,7 @@ type Engine struct {
 	frontendCtors map[string]frontend.HandlerCtor
 	targets       map[string]*target.Target
 	targetCtors   map[string]target.HandlerCtor
+	logger        *slog.Logger
 
 	wg     sync.WaitGroup
 	lock   sync.RWMutex
@@ -29,6 +31,7 @@ type Engine struct {
 
 func New(ctx context.Context, name string) (*Engine, error) {
 	ctx, cancel := context.WithCancel(ctx)
+	logger := slog.Default().With("component", "engine", "name", name)
 
 	plane, err := dataplane.New(ctx, name)
 	if err != nil {
@@ -42,6 +45,7 @@ func New(ctx context.Context, name string) (*Engine, error) {
 		frontendCtors: make(map[string]frontend.HandlerCtor),
 		targets:       make(map[string]*target.Target),
 		targetCtors:   make(map[string]target.HandlerCtor),
+		logger:        logger,
 
 		lock:   sync.RWMutex{},
 		wg:     sync.WaitGroup{},
@@ -57,6 +61,9 @@ func New(ctx context.Context, name string) (*Engine, error) {
 func (e *Engine) Close() {
 	e.lock.Lock()
 	defer e.lock.Unlock()
+	if e.closed {
+		return
+	}
 	e.closed = true
 	e.cancel()
 }
@@ -332,7 +339,10 @@ func (e *Engine) joinFrontend(f *frontend.Frontend) {
 
 func (e *Engine) start() {
 	go func() {
+		e.logger.Info("engine event loop started")
 		<-e.ctx.Done()
+		e.logger.Info("engine event loop stopping")
 		e.Close()
+		e.logger.Info("engine event loop stopped")
 	}()
 }

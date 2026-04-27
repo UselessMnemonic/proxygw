@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"proxygw/pkg/config"
 	"proxygw/pkg/dataplane"
@@ -15,6 +16,7 @@ type Target struct {
 	name    string
 	kind    string
 	handler Handler
+	logger  *slog.Logger
 
 	dnat      *dataplane.DNATGroup
 	requests  chan State
@@ -57,6 +59,7 @@ func New(ctx context.Context, dnat *dataplane.DNATGroup, handler Handler, cfg co
 		name:    cfg.Name,
 		kind:    cfg.Kind.String(),
 		handler: handler,
+		logger:  slog.Default().With("component", "target", "name", cfg.Name, "kind", cfg.Kind.String()),
 
 		dnat:      dnat,
 		requests:  make(chan State, 1),
@@ -188,6 +191,7 @@ func (t *Target) Wait() {
 }
 
 func (t *Target) tryWarm() {
+	t.logger.Info("warm started")
 	err := t.handler.Warm()
 
 	t.lock.Lock()
@@ -195,6 +199,7 @@ func (t *Target) tryWarm() {
 	t.err = err
 	if t.err != nil {
 		t.state = Inactive
+		t.logger.Error("warm failed", "err", t.err)
 		return
 	}
 
@@ -205,11 +210,14 @@ func (t *Target) tryWarm() {
 	err = t.dnat.Enable()
 	if err != nil {
 		t.err = fmt.Errorf("failed to enable DNAT: %w", err)
+		t.logger.Error("warm failed", "err", t.err)
 		return
 	}
+	t.logger.Info("warm completed")
 }
 
 func (t *Target) tryDrain() {
+	t.logger.Info("drain started")
 	err := t.handler.Drain()
 
 	t.lock.Lock()
@@ -217,6 +225,7 @@ func (t *Target) tryDrain() {
 	t.err = err
 	if t.err != nil {
 		t.state = Active
+		t.logger.Error("drain failed", "err", t.err)
 		return
 	}
 
@@ -227,8 +236,10 @@ func (t *Target) tryDrain() {
 	err = t.dnat.Disable()
 	if err != nil {
 		t.err = fmt.Errorf("failed to disable DNAT: %w", err)
+		t.logger.Error("drain failed", "err", t.err)
 		return
 	}
+	t.logger.Info("drain completed")
 }
 
 func (t *Target) end() {
@@ -243,7 +254,11 @@ func (t *Target) end() {
 
 func (t *Target) start() {
 	t.wg.Go(func() {
-		defer t.end()
+		t.logger.Info("event loop started")
+		defer func() {
+			t.end()
+			t.logger.Info("event loop stopped", "state", t.State().String(), "err", t.Error())
+		}()
 		for {
 			select {
 			case <-t.ctx.Done():
@@ -251,16 +266,17 @@ func (t *Target) start() {
 			case next := <-t.requests:
 				switch next {
 				case Warming:
+					t.logger.Info("warm requested")
 					t.tryWarm()
 				case Draining:
+					t.logger.Info("drain requested")
 					t.tryDrain()
 				default:
 					continue
 				}
 			case timeout := <-t.dnat.Timeout():
+				t.logger.Info("timeout event", "timestamp", timeout.Timestamp)
 				go func() {
-					// TODO log this event
-					_ = timeout
 					t.Drain()
 				}()
 			}

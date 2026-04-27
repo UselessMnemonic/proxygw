@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 
 	"github.com/google/nftables"
@@ -13,6 +14,7 @@ type Dataplane struct {
 	ct         *conntrack.Conn
 	nft        *nftables.Conn
 	dnatGroups map[string]*DNATGroup
+	logger     *slog.Logger
 
 	table            *nftables.Table
 	dnatSpecific4    *nftables.Set
@@ -48,6 +50,7 @@ func New(ctx context.Context, name string) (*Dataplane, error) {
 		ct:         ct,
 		nft:        nft,
 		dnatGroups: make(map[string]*DNATGroup),
+		logger:     slog.Default().With("component", "dataplane", "table", name),
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -75,6 +78,9 @@ func (d *Dataplane) Error() error {
 func (d *Dataplane) Close() {
 	d.lock.Lock()
 	defer d.lock.Unlock()
+	if d.closed {
+		return
+	}
 	d.closed = true
 	d.cancel()
 }

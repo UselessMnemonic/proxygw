@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"proxygw/pkg/config"
 	"proxygw/pkg/dataplane"
 	"proxygw/pkg/target"
@@ -14,6 +15,7 @@ type Frontend struct {
 	name    string
 	kind    string
 	handler Handler
+	logger  *slog.Logger
 
 	target   *target.Target
 	endpoint target.Endpoint
@@ -56,6 +58,7 @@ func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, h
 		name:    cfg.Name,
 		kind:    cfg.Kind.String(),
 		handler: handler,
+		logger:  slog.Default().With("component", "frontend", "name", cfg.Name, "kind", cfg.Kind.String(), "target", target.Name(), "endpoint", endpoint.Name),
 
 		target:   target,
 		endpoint: endpoint,
@@ -159,6 +162,7 @@ func (f *Frontend) Stop() bool {
 }
 
 func (f *Frontend) tryStart() {
+	f.logger.Info("start started", "listen", f.Listen())
 	err := f.handler.Start()
 
 	f.lock.Lock()
@@ -166,14 +170,17 @@ func (f *Frontend) tryStart() {
 	f.err = err
 	if f.err != nil {
 		f.state = Stopping
+		f.logger.Error("start failed", "err", f.err)
 		return
 	}
 
 	// the frontend is definitely running
 	f.state = Running
+	f.logger.Info("start completed", "listen", f.Listen())
 }
 
 func (f *Frontend) tryStop() {
+	f.logger.Info("stop started", "listen", f.Listen())
 	err := f.handler.Stop()
 
 	f.lock.Lock()
@@ -181,11 +188,13 @@ func (f *Frontend) tryStop() {
 	f.err = err
 	if f.err != nil {
 		f.state = Starting
+		f.logger.Error("stop failed", "err", f.err)
 		return
 	}
 
 	// the frontend is definitely stopped
 	f.state = Stopped
+	f.logger.Info("stop completed", "listen", f.Listen())
 }
 
 func (f *Frontend) end() {
@@ -200,18 +209,25 @@ func (f *Frontend) end() {
 
 func (f *Frontend) start() {
 	f.wg.Go(func() {
-		defer f.end()
+		f.logger.Info("event loop started")
+		defer func() {
+			f.end()
+			f.logger.Info("event loop stopped", "state", f.State().String(), "err", f.Error())
+		}()
 		for {
 			select {
 			case <-f.ctx.Done():
 				return
 			case <-f.handler.ShouldWarm():
+				f.logger.Info("warm signal received")
 				f.target.Warm()
 			case next := <-f.requests:
 				switch next {
 				case Starting:
+					f.logger.Info("start requested")
 					f.tryStart()
 				case Stopping:
+					f.logger.Info("stop requested")
 					f.tryStop()
 				default:
 					continue

@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,6 +22,8 @@ import (
 )
 
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	slog.SetDefault(logger)
 	app := kingpin.New("proxygw", "Proxy gateway daemon")
 
 	configPath := app.Flag("config", "path to runtime configuration").
@@ -29,13 +31,13 @@ func main() {
 		String()
 
 	if _, err := app.Parse(os.Args[1:]); err != nil {
-		log.Printf("proxygw: %v", err)
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
 
 	err := run(*configPath)
 	if err != nil {
-		log.Printf("proxygw: %v", err)
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
 }
@@ -170,6 +172,7 @@ func closeEngine(eng *engine.Engine) {
 	if eng == nil {
 		return
 	}
+	slog.Default().Info("waiting for engine shutdown")
 	eng.Close()
 	eng.Wait()
 }
