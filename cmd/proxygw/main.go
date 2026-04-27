@@ -1,6 +1,6 @@
 package main
 
-//go:generate go run -mod=readonly ../tool/gen.go
+//go:generate go run ../tool/gen.go
 
 import (
 	"context"

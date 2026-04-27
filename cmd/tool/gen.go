@@ -13,8 +13,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type pluginConfig struct {
-	Plugins []string
+type pluginModule struct {
+	Reference string
+	Version   string
 }
 
 func main() {
@@ -41,7 +42,7 @@ func run() error {
 		return err
 	}
 
-	imports, err := resolveImports(root, modulePath, config.Plugins)
+	imports, err := resolveImports(root, modulePath, config)
 	if err != nil {
 		return err
 	}
@@ -80,43 +81,60 @@ func readModulePath(path string) (string, error) {
 	return "", fmt.Errorf("%s: module directive not found", path)
 }
 
-func parsePluginConfig(path string) (pluginConfig, error) {
+func parsePluginConfig(path string) ([]pluginModule, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return pluginConfig{}, fmt.Errorf("read %s: %w", path, err)
+		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
-	var config pluginConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return pluginConfig{}, fmt.Errorf("parse %s: %w", path, err)
+	config := make(map[string]string)
+	if err = yaml.Unmarshal(data, config); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	if len(config.Plugins) == 0 {
-		return pluginConfig{}, fmt.Errorf("%s: plugins list is empty", path)
+	if len(config) == 0 {
+		return nil, fmt.Errorf("%s: plugin mapping is empty", path)
 	}
 
-	for i, plugin := range config.Plugins {
-		if strings.TrimSpace(plugin) == "" {
-			return pluginConfig{}, fmt.Errorf("%s: plugins[%d] is empty", path, i)
+	modules := make([]pluginModule, 0, len(config))
+	for ref, version := range config {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			return nil, fmt.Errorf("%s: module reference is empty", path)
 		}
+
+		version = strings.TrimSpace(version)
+		if version == "" {
+			return nil, fmt.Errorf("%s: version for module %q is empty", path, ref)
+		}
+
+		modules = append(modules, pluginModule{
+			Reference: ref,
+			Version:   version,
+		})
 	}
 
-	return config, nil
+	return modules, nil
 }
 
-func resolveImports(root, modulePath string, plugins []string) ([]string, error) {
+func resolveImports(root, modulePath string, plugins []pluginModule) ([]string, error) {
 	imports := make([]string, 0, len(plugins))
 	for _, plugin := range plugins {
-		if plugin == "" {
+		if plugin.Reference == "" {
 			return nil, errors.New("plugin entry must not be empty")
 		}
 
-		localPath := filepath.Join(root, "plugin", filepath.FromSlash(plugin))
-		if info, err := os.Stat(localPath); err == nil && info.IsDir() {
-			imports = append(imports, filepath.ToSlash(filepath.Join(modulePath, "plugin", filepath.FromSlash(plugin))))
+		if plugin.Version != "builtin" {
+			imports = append(imports, plugin.Reference)
 			continue
 		}
 
-		imports = append(imports, plugin)
+		localPath := filepath.Join(root, "plugin", filepath.FromSlash(plugin.Reference))
+		if info, err := os.Stat(localPath); err == nil && info.IsDir() {
+			imports = append(imports, filepath.ToSlash(filepath.Join(modulePath, "plugin", filepath.FromSlash(plugin.Reference))))
+			continue
+		}
+
+		return nil, fmt.Errorf("builtin plugin %q not found under %s", plugin.Reference, filepath.Join(root, "plugin"))
 	}
 	return imports, nil
 }
