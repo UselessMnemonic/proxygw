@@ -50,6 +50,8 @@ func onLoad(config map[string]any, engine *engine.Engine, _ *plugin.Namespace) e
 		return err
 	}
 
+	ctx, cancel = context.WithCancel(context.Background())
+
 	go listenLoop(listener, engine)
 	return nil
 }
