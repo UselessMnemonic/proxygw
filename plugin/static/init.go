@@ -10,7 +10,7 @@ import (
 func init() {
 	err := plugin.Register("static", plugin.Handler{
 		OnLoad: func(_ map[string]any, _ *engine.Engine, namespace *plugin.Namespace) error {
-			namespace.Frontends["drop"] = frontends.NewDropHandler
+			namespace.Frontends["eager"] = frontends.NewEagerHandler
 			namespace.Targets["none"] = targets.NewNoneHandler
 			return nil
 		},
