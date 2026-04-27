@@ -150,8 +150,13 @@ func applyConfig(cfg *config.Config, eng *engine.Engine) error {
 	}
 
 	for _, frontendCfg := range cfg.Frontends {
-		if _, err := eng.NewFrontend(frontendCfg); err != nil {
-			return fmt.Errorf("create frontend %q: %w", frontendCfg.Name, err)
+		frontend, err := eng.NewFrontend(frontendCfg)
+		if err != nil {
+			slog.Default().Error("create frontend failed", "name", frontendCfg.Name, "err", err)
+			continue
+		}
+		if !frontend.Start() {
+			slog.Default().Error("start frontend failed", "name", frontendCfg.Name, "err", "start rejected")
 		}
 	}
 
