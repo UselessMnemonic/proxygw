@@ -20,4 +20,5 @@ test:
 	$(GO) test ./...
 
 clean:
+	go clean -testcache
 	rm -f $(BINDIR)/proxygw $(BINDIR)/proxygwctl cmd/proxygw/plugin.go

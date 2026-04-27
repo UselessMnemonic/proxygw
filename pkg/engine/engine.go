@@ -27,10 +27,10 @@ type Engine struct {
 	closed bool
 }
 
-func New(ctx context.Context) (*Engine, error) {
+func New(ctx context.Context, name string) (*Engine, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	plane, err := dataplane.New(ctx)
+	plane, err := dataplane.New(ctx, name)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("creating dataplane: %w", err)

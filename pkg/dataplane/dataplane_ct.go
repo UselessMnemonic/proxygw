@@ -1,6 +1,7 @@
 package dataplane
 
 import (
+	"errors"
 	"maps"
 	"net/netip"
 	"time"
@@ -75,9 +76,9 @@ func (d *Dataplane) teardown() {
 	d.closed = true
 	groups := maps.Clone(d.dnatGroups)
 	for _, g := range groups {
-		g.close()
+		d.err = errors.Join(d.err, g.close())
 	}
-	d.ensureTableDeleted()
+	d.err = errors.Join(d.err, d.ensureTableDeleted())
 	d.ct.Close()
 }
 

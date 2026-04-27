@@ -49,7 +49,7 @@ func run(configPath string) (err error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	eng, err := engine.New(ctx)
+	eng, err := engine.New(ctx, "proxygw")
 	if err != nil {
 		return fmt.Errorf("create engine: %w", err)
 	}

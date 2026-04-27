@@ -9,6 +9,7 @@ import (
 )
 
 type Dataplane struct {
+	name       string
 	ct         *conntrack.Conn
 	nft        *nftables.Conn
 	dnatGroups map[string]*DNATGroup
@@ -29,7 +30,7 @@ type Dataplane struct {
 	closed bool
 }
 
-func New(ctx context.Context) (*Dataplane, error) {
+func New(ctx context.Context, name string) (*Dataplane, error) {
 	ct, err := conntrack.Dial(nil)
 	if err != nil {
 		return nil, err
@@ -43,6 +44,7 @@ func New(ctx context.Context) (*Dataplane, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 	d := &Dataplane{
+		name:       name,
 		ct:         ct,
 		nft:        nft,
 		dnatGroups: make(map[string]*DNATGroup),

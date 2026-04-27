@@ -2,6 +2,7 @@ package dataplane
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"net/netip"
@@ -30,17 +31,18 @@ var value6 = nftables.MustConcatSetType(
 
 func (d *Dataplane) ensureTableAdded() error {
 	// clear any old table
-	existingTable, _ := d.nft.ListTableOfFamily("proxygw", nftables.TableFamilyINet)
-	if existingTable != nil {
+	existingTable, err := d.nft.ListTableOfFamily(d.name, nftables.TableFamilyINet)
+	if err == nil && existingTable != nil {
 		d.nft.DelTable(existingTable)
-		if err := d.nft.Flush(); err != nil {
-			return fmt.Errorf("delete stale table %q: %w", existingTable.Name, err)
-		}
+		err = d.nft.Flush()
+	}
+	if err != nil && !errors.Is(err, unix.ENOENT) {
+		return fmt.Errorf("delete existing table %q: %w", d.name, err)
 	}
 
 	// define table
 	d.table = d.nft.CreateTable(&nftables.Table{
-		Name:   "proxygw",
+		Name:   d.name,
 		Family: nftables.TableFamilyINet,
 	})
 
@@ -117,7 +119,7 @@ func (d *Dataplane) ensureTableAdded() error {
 	d.nft.AddChain(d.inputFilterChain)
 
 	// submit changes for base table
-	if err := d.nft.Flush(); err != nil {
+	if err = d.nft.Flush(); err != nil {
 		return fmt.Errorf("create table %q: %w", d.table.Name, err)
 	}
 
@@ -129,31 +131,31 @@ func (d *Dataplane) ensureTableAdded() error {
 			// meta nfproto -> reg 1
 			&expr.Meta{
 				Key:      expr.MetaKeyNFPROTO,
-				Register: 1,
+				Register: unix.NFT_REG_1,
 			},
 			// reg 1 == ipv4
 			&expr.Cmp{
 				Op:       expr.CmpOpEq,
-				Register: 1,
+				Register: unix.NFT_REG_1,
 				Data:     []byte{unix.NFPROTO_IPV4},
 			},
 			// meta l4proto -> reg 1
 			&expr.Meta{
 				Key:      expr.MetaKeyL4PROTO,
-				Register: 1,
+				Register: unix.NFT_REG_1,
 			},
 			// load th dport -> reg 2
 			&expr.Payload{
-				DestRegister: 2,
+				DestRegister: unix.NFT_REG_2,
 				Base:         expr.PayloadBaseTransportHeader,
 				Offset:       2,
 				Len:          2,
 			},
 			// lookup key (l4proto . th dport) in @dnatWildcard4, write value to reg 1+
 			&expr.Lookup{
-				SourceRegister: 1,
+				SourceRegister: unix.NFT_REG_1,
 				SetID:          d.dnatWildcard4.ID,
-				DestRegister:   1,
+				DestRegister:   unix.NFT_REG_1,
 				IsDestRegSet:   true,
 				SetName:        d.dnatWildcard4.Name,
 			},
@@ -161,8 +163,8 @@ func (d *Dataplane) ensureTableAdded() error {
 			&expr.NAT{
 				Type:        expr.NATTypeDestNAT,
 				Family:      unix.NFPROTO_IPV4,
-				RegAddrMin:  1,
-				RegProtoMin: 2,
+				RegAddrMin:  unix.NFT_REG_1,
+				RegProtoMin: unix.NFT_REG_2,
 				Specified:   true,
 			},
 		},
@@ -176,31 +178,31 @@ func (d *Dataplane) ensureTableAdded() error {
 			// meta nfproto -> reg 1
 			&expr.Meta{
 				Key:      expr.MetaKeyNFPROTO,
-				Register: 1,
+				Register: unix.NFT_REG_1,
 			},
 			// reg 1 == ipv6
 			&expr.Cmp{
 				Op:       expr.CmpOpEq,
-				Register: 1,
+				Register: unix.NFT_REG_1,
 				Data:     []byte{unix.NFPROTO_IPV6},
 			},
 			// meta l4proto -> reg 1
 			&expr.Meta{
 				Key:      expr.MetaKeyL4PROTO,
-				Register: 1,
+				Register: unix.NFT_REG_1,
 			},
 			// load th dport -> reg 2
 			&expr.Payload{
-				DestRegister: 2,
+				DestRegister: unix.NFT_REG_2,
 				Base:         expr.PayloadBaseTransportHeader,
 				Offset:       2,
 				Len:          2,
 			},
 			// lookup key (l4proto . th dport) in @dnatWildcard6, write value to reg 1+
 			&expr.Lookup{
-				SourceRegister: 1,
+				SourceRegister: unix.NFT_REG_1,
 				SetID:          d.dnatWildcard6.ID,
-				DestRegister:   1,
+				DestRegister:   unix.NFT_REG_1,
 				IsDestRegSet:   true,
 				SetName:        d.dnatWildcard6.Name,
 			},
@@ -208,8 +210,8 @@ func (d *Dataplane) ensureTableAdded() error {
 			&expr.NAT{
 				Type:        expr.NATTypeDestNAT,
 				Family:      unix.NFPROTO_IPV6,
-				RegAddrMin:  1,
-				RegProtoMin: 5,
+				RegAddrMin:  unix.NFT_REG_1,
+				RegProtoMin: unix.NFT_REG32_04,
 				Specified:   true,
 			},
 		},
@@ -223,38 +225,38 @@ func (d *Dataplane) ensureTableAdded() error {
 			// meta nfproto -> reg 1
 			&expr.Meta{
 				Key:      expr.MetaKeyNFPROTO,
-				Register: 1,
+				Register: unix.NFT_REG_1,
 			},
 			// reg 1 == ipv4
 			&expr.Cmp{
 				Op:       expr.CmpOpEq,
-				Register: 1,
+				Register: unix.NFT_REG_1,
 				Data:     []byte{unix.NFPROTO_IPV4},
 			},
 			// meta l4proto -> reg 1
 			&expr.Meta{
 				Key:      expr.MetaKeyL4PROTO,
-				Register: 1,
+				Register: unix.NFT_REG_1,
 			},
 			// load ip daddr -> reg 2
 			&expr.Payload{
-				DestRegister: 2,
+				DestRegister: unix.NFT_REG_2,
 				Base:         expr.PayloadBaseNetworkHeader,
 				Offset:       16,
 				Len:          4,
 			},
 			// load th dport -> reg 3
 			&expr.Payload{
-				DestRegister: 3,
+				DestRegister: unix.NFT_REG_3,
 				Base:         expr.PayloadBaseTransportHeader,
 				Offset:       2,
 				Len:          2,
 			},
 			// lookup key (l4proto . ip daddr . th dport) in @dnatSpecific4, write value to reg 1+
 			&expr.Lookup{
-				SourceRegister: 1,
+				SourceRegister: unix.NFT_REG_1,
 				SetID:          d.dnatSpecific4.ID,
-				DestRegister:   1,
+				DestRegister:   unix.NFT_REG_1,
 				IsDestRegSet:   true,
 				SetName:        d.dnatSpecific4.Name,
 			},
@@ -262,8 +264,8 @@ func (d *Dataplane) ensureTableAdded() error {
 			&expr.NAT{
 				Type:        expr.NATTypeDestNAT,
 				Family:      unix.NFPROTO_IPV4,
-				RegAddrMin:  1,
-				RegProtoMin: 2,
+				RegAddrMin:  unix.NFT_REG_1,
+				RegProtoMin: unix.NFT_REG_2,
 				Specified:   true,
 			},
 		},
@@ -277,38 +279,38 @@ func (d *Dataplane) ensureTableAdded() error {
 			// meta nfproto -> reg 1
 			&expr.Meta{
 				Key:      expr.MetaKeyNFPROTO,
-				Register: 1,
+				Register: unix.NFT_REG32_00,
 			},
 			// reg 1 == ipv6
 			&expr.Cmp{
 				Op:       expr.CmpOpEq,
-				Register: 1,
+				Register: unix.NFT_REG32_00,
 				Data:     []byte{unix.NFPROTO_IPV6},
 			},
 			// meta l4proto -> reg 1
 			&expr.Meta{
 				Key:      expr.MetaKeyL4PROTO,
-				Register: 1,
+				Register: unix.NFT_REG32_00,
 			},
 			// load ip6 daddr -> reg 2
 			&expr.Payload{
-				DestRegister: 2,
+				DestRegister: unix.NFT_REG32_01,
 				Base:         expr.PayloadBaseNetworkHeader,
 				Offset:       24,
 				Len:          16,
 			},
 			// load th dport -> reg 6
 			&expr.Payload{
-				DestRegister: 6,
+				DestRegister: unix.NFT_REG32_05,
 				Base:         expr.PayloadBaseTransportHeader,
 				Offset:       2,
 				Len:          2,
 			},
 			// lookup key (l4proto . ip6 daddr . th dport) in @dnatSpecific6, write value to reg 1+
 			&expr.Lookup{
-				SourceRegister: 1,
+				SourceRegister: unix.NFT_REG32_00,
 				SetID:          d.dnatSpecific6.ID,
-				DestRegister:   1,
+				DestRegister:   unix.NFT_REG_1,
 				IsDestRegSet:   true,
 				SetName:        d.dnatSpecific6.Name,
 			},
@@ -316,23 +318,27 @@ func (d *Dataplane) ensureTableAdded() error {
 			&expr.NAT{
 				Type:        expr.NATTypeDestNAT,
 				Family:      unix.NFPROTO_IPV6,
-				RegAddrMin:  1,
-				RegProtoMin: 5,
+				RegAddrMin:  unix.NFT_REG_1,
+				RegProtoMin: unix.NFT_REG32_04,
 				Specified:   true,
 			},
 		},
 	})
 
 	// submit changes for base rules
-	if err := d.nft.Flush(); err != nil {
-		return fmt.Errorf("create table %q: %w", d.table.Name, err)
+	if err = d.nft.Flush(); err != nil {
+		return fmt.Errorf("create table rules for %q: %w", d.table.Name, err)
 	}
 	return nil
 }
 
 func (d *Dataplane) ensureTableDeleted() error {
 	d.nft.DelTable(d.table)
-	return d.nft.Flush()
+	err := d.nft.Flush()
+	if errors.Is(err, unix.ENOENT) {
+		return nil
+	}
+	return err
 }
 
 func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort, ttl config.TTL) error {
@@ -390,28 +396,28 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 				// meta l4proto -> reg 1
 				&expr.Meta{
 					Key:      expr.MetaKeyL4PROTO,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 				},
 				// reg 1 == configured protocol (tcp/udp)
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 					Data:     []byte{l4Protocol},
 				},
 				// meta nfproto -> reg 1
 				&expr.Meta{
 					Key:      expr.MetaKeyNFPROTO,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 				},
 				// reg 1 == ipv6 for this frontend
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 					Data:     []byte{unix.NFPROTO_IPV6, 0},
 				},
 				// load ip6 daddr -> reg 2
 				&expr.Payload{
-					DestRegister: 2,
+					DestRegister: unix.NFT_REG_2,
 					Base:         expr.PayloadBaseNetworkHeader,
 					Offset:       24,
 					Len:          16,
@@ -419,12 +425,12 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 				// reg 2 == frontend listen IPv6 address
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 2,
+					Register: unix.NFT_REG_2,
 					Data:     addr.Addr().AsSlice(),
 				},
 				// load th dport -> reg 6
 				&expr.Payload{
-					DestRegister: 6,
+					DestRegister: unix.NFT_REG_3,
 					Base:         expr.PayloadBaseTransportHeader,
 					Offset:       2,
 					Len:          2,
@@ -432,7 +438,7 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 				// reg 6 == frontend listen port
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 6,
+					Register: unix.NFT_REG_3,
 					Data:     encodePort(addr.Port()),
 				},
 				// apply ct timeout policy object by name
@@ -447,28 +453,28 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 				// meta l4proto -> reg 1
 				&expr.Meta{
 					Key:      expr.MetaKeyL4PROTO,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 				},
 				// reg 1 == configured protocol (tcp/udp)
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 					Data:     []byte{l4Protocol},
 				},
 				// meta nfproto -> reg 1
 				&expr.Meta{
 					Key:      expr.MetaKeyNFPROTO,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 				},
 				// reg 1 == ipv6 for this frontend
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 					Data:     []byte{unix.NFPROTO_IPV6, 0},
 				},
 				// load th dport -> reg 2
 				&expr.Payload{
-					DestRegister: 2,
+					DestRegister: unix.NFT_REG_2,
 					Base:         expr.PayloadBaseTransportHeader,
 					Offset:       2,
 					Len:          2,
@@ -476,7 +482,7 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 				// reg 2 == frontend listen port
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 2,
+					Register: unix.NFT_REG_2,
 					Data:     encodePort(addr.Port()),
 				},
 				// apply ct timeout policy object by name
@@ -495,28 +501,28 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 				// meta l4proto -> reg 1
 				&expr.Meta{
 					Key:      expr.MetaKeyL4PROTO,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 				},
 				// reg 1 == configured protocol (tcp/udp)
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 					Data:     []byte{l4Protocol},
 				},
 				// meta nfproto -> reg 1
 				&expr.Meta{
 					Key:      expr.MetaKeyNFPROTO,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 				},
 				// reg 1 == ipv4 or ipv6 family for this frontend
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 					Data:     []byte{unix.NFPROTO_IPV4, 0},
 				},
 				// load ip daddr -> reg 2
 				&expr.Payload{
-					DestRegister: 2,
+					DestRegister: unix.NFT_REG_2,
 					Base:         expr.PayloadBaseNetworkHeader,
 					Offset:       16,
 					Len:          4,
@@ -524,12 +530,12 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 				// reg 2 == frontend listen IPv4 address
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 2,
+					Register: unix.NFT_REG_2,
 					Data:     addr.Addr().AsSlice(),
 				},
 				// load th dport -> reg 3
 				&expr.Payload{
-					DestRegister: 3,
+					DestRegister: unix.NFT_REG_3,
 					Base:         expr.PayloadBaseTransportHeader,
 					Offset:       2,
 					Len:          2,
@@ -537,7 +543,7 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 				// reg 3 == frontend listen port
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 3,
+					Register: unix.NFT_REG_3,
 					Data:     encodePort(addr.Port()),
 				},
 				// apply ct timeout policy object by name
@@ -552,28 +558,28 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 				// meta l4proto -> reg 1
 				&expr.Meta{
 					Key:      expr.MetaKeyL4PROTO,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 				},
 				// reg 1 == configured protocol (tcp/udp)
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 					Data:     []byte{l4Protocol},
 				},
 				// meta nfproto -> reg 1
 				&expr.Meta{
 					Key:      expr.MetaKeyNFPROTO,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 				},
 				// reg 1 == ipv4 for this frontend
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 1,
+					Register: unix.NFT_REG_1,
 					Data:     []byte{unix.NFPROTO_IPV4, 0},
 				},
 				// load th dport -> reg 2
 				&expr.Payload{
-					DestRegister: 2,
+					DestRegister: unix.NFT_REG_2,
 					Base:         expr.PayloadBaseTransportHeader,
 					Offset:       2,
 					Len:          2,
@@ -581,7 +587,7 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 				// reg 2 == frontend listen port
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
-					Register: 2,
+					Register: unix.NFT_REG_2,
 					Data:     encodePort(addr.Port()),
 				},
 				// apply ct timeout policy object by name
@@ -607,12 +613,12 @@ func (dg *DNATGroup) ensureTimeoutDeleted(proto config.Protocol, addr netip.Addr
 		return nil
 	}
 	if info.timeoutRule != nil {
-		if err := dg.dplane.nft.DelRule(info.timeoutRule); err != nil {
+		if err := dg.dplane.nft.DelRule(info.timeoutRule); err != nil && !errors.Is(err, unix.ENOENT) {
 			return fmt.Errorf("prepare delete ttl rule: %w", err)
 		}
 	}
 	dg.dplane.nft.DeleteObject(info.timeoutObj)
-	if err := dg.dplane.nft.Flush(); err != nil {
+	if err := dg.dplane.nft.Flush(); err != nil && !errors.Is(err, unix.ENOENT) {
 		return fmt.Errorf("delete ttl rule: %w", err)
 	}
 	delete(dg.flowInfoBySrc, dnatKey{addr, proto})
@@ -662,7 +668,7 @@ func (dg *DNATGroup) ensureDNATDeleted(mappings []DNATMapping) error {
 				set = dg.dplane.dnatWildcard6
 			}
 			if err := dg.dplane.nft.SetDeleteElements(set, []nftables.SetElement{elem}); err != nil {
-				return fmt.Errorf("prepare add elements: %w", err)
+				return fmt.Errorf("prepare del elements: %w", err)
 			}
 		}
 		if m.Source.Addr().Is4() {
@@ -671,7 +677,7 @@ func (dg *DNATGroup) ensureDNATDeleted(mappings []DNATMapping) error {
 				set = dg.dplane.dnatWildcard4
 			}
 			if err := dg.dplane.nft.SetDeleteElements(set, []nftables.SetElement{elem}); err != nil {
-				return fmt.Errorf("prepare add elements: %w", err)
+				return fmt.Errorf("prepare del elements: %w", err)
 			}
 		}
 	}

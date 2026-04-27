@@ -3,21 +3,25 @@ package dataplane
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"strings"
 	"testing"
-
-	"github.com/google/nftables"
+	"time"
 
 	"proxygw/pkg/config"
+
+	"github.com/google/nftables"
+	"golang.org/x/sys/unix"
 )
 
 func TestDataplaneLifecycle(t *testing.T) {
 	t.Parallel()
 
-	d := mustNewTestDataplane(t)
+	tableName := testDataplaneName(t)
+	d := mustNewTestDataplane(t, tableName)
 
-	table := mustLookupProxyGWTable(t)
+	table := lookupProxyGWTable(t, tableName)
 	if table == nil {
 		t.Fatal("expected proxygw table to exist after bring-up")
 	}
@@ -61,6 +65,7 @@ func TestDataplaneLifecycle(t *testing.T) {
 
 	d.Close()
 	d.Wait()
+	waitForProxyGWTableDeleted(t, tableName)
 
 	if d.Error() != nil {
 		t.Fatalf("Error() after tear-down = %v, want nil", d.Error())
@@ -69,53 +74,69 @@ func TestDataplaneLifecycle(t *testing.T) {
 		t.Fatalf("NewDNATGroup() after Close error = %v, want %v", err, ErrClosed)
 	}
 
-	table = mustLookupProxyGWTable(t)
+	table = lookupProxyGWTable(t, tableName)
 	if table != nil {
 		t.Fatalf("expected proxygw table to be removed after tear-down, found %q", table.Name)
 	}
 }
 
-func mustNewTestDataplane(t *testing.T) *Dataplane {
+func mustNewTestDataplane(t *testing.T, tableName string) *Dataplane {
 	t.Helper()
 
-	d, err := New(context.Background())
+	d, err := New(context.Background(), tableName)
 	if err != nil {
-		skipIfDataplaneUnsupported(t, err)
 		t.Fatalf("New() error = %v", err)
 	}
 
 	t.Cleanup(func() {
 		d.Close()
 		d.Wait()
+		waitForProxyGWTableDeleted(t, tableName)
 	})
 
 	return d
 }
 
-func mustLookupProxyGWTable(t *testing.T) *nftables.Table {
+func lookupProxyGWTable(t *testing.T, tableName string) *nftables.Table {
 	t.Helper()
 
 	conn, err := nftables.New()
 	if err != nil {
-		skipIfDataplaneUnsupported(t, err)
 		t.Fatalf("nftables.New() error = %v", err)
 	}
 
-	table, err := conn.ListTableOfFamily("proxygw", nftables.TableFamilyINet)
-	if err != nil {
-		skipIfDataplaneUnsupported(t, err)
-		t.Fatalf("ListTableOfFamily() error = %v", err)
+	table, err := conn.ListTableOfFamily(tableName, nftables.TableFamilyINet)
+	if err == nil {
+		return table
 	}
+	if errors.Is(err, unix.ENOENT) {
+		return nil
+	}
+	t.Fatalf("ListTableOfFamily() error = %v", err)
 	return table
 }
 
-func skipIfDataplaneUnsupported(t *testing.T, err error) {
+func waitForProxyGWTableDeleted(t *testing.T, tableName string) {
 	t.Helper()
 
-	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "operation not permitted") ||
-		strings.Contains(msg, "permission denied") ||
-		strings.Contains(msg, "numerical result out of range") {
-		t.Skipf("dataplane lifecycle test requires netfilter permissions: %v", err)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if lookupProxyGWTable(t, tableName) == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
+
+	table := lookupProxyGWTable(t, tableName)
+	if table != nil {
+		t.Fatalf("timed out waiting for proxygw table to be deleted; found %q", table.Name)
+	}
+}
+
+func testDataplaneName(t *testing.T) string {
+	t.Helper()
+
+	name := strings.ToLower(t.Name())
+	name = strings.NewReplacer("/", "_", " ", "_", "-", "_").Replace(name)
+	return fmt.Sprintf("proxygw_%s", name)
 }
