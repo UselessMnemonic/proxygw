@@ -205,6 +205,11 @@ func (f *Frontend) end() {
 		f.target.DNATGroup().DelMappings(f.mapping),
 		f.handler.Close(),
 	)
+	if f.err != nil {
+		f.logger.Error("close failed", "err", f.err)
+		return
+	}
+	f.logger.Info("close completed")
 }
 
 func (f *Frontend) start() {
@@ -212,7 +217,11 @@ func (f *Frontend) start() {
 		f.logger.Info("event loop started")
 		defer func() {
 			f.end()
-			f.logger.Info("event loop stopped", "state", f.State().String(), "err", f.Error())
+			if err := f.Error(); err != nil {
+				f.logger.Error("event loop stopped", "state", f.State().String(), "err", err)
+				return
+			}
+			f.logger.Info("event loop stopped", "state", f.State().String())
 		}()
 		for {
 			select {

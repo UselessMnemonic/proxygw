@@ -35,29 +35,33 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := run(*configPath)
+	err := run(logger.With("component", "proxygw"), *configPath)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
 }
 
-func run(configPath string) (err error) {
+func run(logger *slog.Logger, configPath string) (err error) {
+	logger.Info("loading config", "path", configPath)
 	cfg, err := loadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("load config %q: %w", configPath, err)
 	}
+	logger.Info("config loaded", "path", configPath)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	logger.Info("creating engine", "name", "proxygw")
 	eng, err := engine.New(ctx, "proxygw")
 	if err != nil {
 		return fmt.Errorf("create engine: %w", err)
 	}
-	defer closeEngine(eng)
+	defer closeEngine(logger, eng)
+	logger.Info("engine created", "name", "proxygw")
 
-	return pluginScope(ctx, cfg, eng)
+	return pluginScope(logger, ctx, cfg, eng)
 }
 
 func loadConfig(path string) (*config.Config, error) {
@@ -76,7 +80,7 @@ func loadConfig(path string) (*config.Config, error) {
 	return cfg, nil
 }
 
-func pluginScope(ctx context.Context, cfg *config.Config, eng *engine.Engine) (err error) {
+func pluginScope(logger *slog.Logger, ctx context.Context, cfg *config.Config, eng *engine.Engine) (err error) {
 	registry := plugin.Export()
 	for pluginName, handler := range registry {
 		namespace := &plugin.Namespace{
@@ -90,31 +94,38 @@ func pluginScope(ctx context.Context, cfg *config.Config, eng *engine.Engine) (e
 		}
 
 		if handler.OnLoad != nil {
+			logger.Info("loading plugin", "plugin", pluginName)
 			if err := handler.OnLoad(pluginConfig, eng, namespace); err != nil {
 				return fmt.Errorf("load plugin %q: %w", pluginName, err)
 			}
+			logger.Info("plugin loaded", "plugin", pluginName)
 			defer func(pluginName string, handler plugin.Handler) {
 				if handler.OnUnload == nil {
 					return
 				}
-				err = errors.Join(err, unloadPlugin(pluginName, handler))
+				err = errors.Join(err, unloadPlugin(logger, pluginName, handler))
 			}(pluginName, handler)
 		}
 
 		if err := registerKinds(eng, pluginName, namespace); err != nil {
 			return fmt.Errorf("register plugin %q kinds: %w", pluginName, err)
 		}
+		logger.Info("plugin kinds registered", "plugin", pluginName, "frontends", len(namespace.Frontends), "targets", len(namespace.Targets))
 	}
 
-	return resourceScope(ctx, cfg, eng)
+	return resourceScope(logger, ctx, cfg, eng)
 }
 
-func resourceScope(ctx context.Context, cfg *config.Config, eng *engine.Engine) error {
-	if err := applyConfig(cfg, eng); err != nil {
+func resourceScope(logger *slog.Logger, ctx context.Context, cfg *config.Config, eng *engine.Engine) error {
+	logger.Info("applying config", "targets", len(cfg.Targets), "frontends", len(cfg.Frontends))
+	if err := applyConfig(logger, cfg, eng); err != nil {
 		return err
 	}
+	logger.Info("config applied", "targets", len(cfg.Targets), "frontends", len(cfg.Frontends))
 
+	logger.Info("waiting for shutdown signal")
 	<-ctx.Done()
+	logger.Info("shutdown signal received", "err", ctx.Err())
 	return nil
 }
 
@@ -142,42 +153,51 @@ func registerKinds(eng *engine.Engine, pluginName string, namespace *plugin.Name
 	return nil
 }
 
-func applyConfig(cfg *config.Config, eng *engine.Engine) error {
+func applyConfig(logger *slog.Logger, cfg *config.Config, eng *engine.Engine) error {
 	for _, targetCfg := range cfg.Targets {
+		logger.Info("creating target", "name", targetCfg.Name, "kind", targetCfg.Kind.String())
 		if _, err := eng.NewTarget(targetCfg); err != nil {
 			return fmt.Errorf("create target %q: %w", targetCfg.Name, err)
 		}
+		logger.Info("target created", "name", targetCfg.Name, "kind", targetCfg.Kind.String())
 	}
 
 	for _, frontendCfg := range cfg.Frontends {
+		logger.Info("creating frontend", "name", frontendCfg.Name, "kind", frontendCfg.Kind.String(), "listen", frontendCfg.Listen.String())
 		frontend, err := eng.NewFrontend(frontendCfg)
 		if err != nil {
-			slog.Default().Error("create frontend failed", "name", frontendCfg.Name, "err", err)
+			logger.Error("create frontend failed", "name", frontendCfg.Name, "kind", frontendCfg.Kind.String(), "err", err)
 			continue
 		}
+		logger.Info("frontend created", "name", frontendCfg.Name, "kind", frontendCfg.Kind.String(), "listen", frontendCfg.Listen.String())
 		if !frontend.Start() {
-			slog.Default().Error("start frontend failed", "name", frontendCfg.Name, "err", "start rejected")
+			logger.Error("start frontend rejected", "name", frontendCfg.Name, "kind", frontendCfg.Kind.String(), "err", errors.New("start rejected"))
+			continue
 		}
+		logger.Info("frontend start requested", "name", frontendCfg.Name, "kind", frontendCfg.Kind.String())
 	}
 
 	return nil
 }
 
-func unloadPlugin(name string, handler plugin.Handler) error {
+func unloadPlugin(logger *slog.Logger, name string, handler plugin.Handler) error {
 	if handler.OnUnload == nil {
 		return nil
 	}
+	logger.Info("unloading plugin", "plugin", name)
 	if err := handler.OnUnload(); err != nil {
 		return fmt.Errorf("unload plugin %q: %w", name, err)
 	}
+	logger.Info("plugin unloaded", "plugin", name)
 	return nil
 }
 
-func closeEngine(eng *engine.Engine) {
+func closeEngine(logger *slog.Logger, eng *engine.Engine) {
 	if eng == nil {
 		return
 	}
-	slog.Default().Info("waiting for engine shutdown")
+	logger.Info("closing engine")
 	eng.Close()
 	eng.Wait()
+	logger.Info("engine closed")
 }

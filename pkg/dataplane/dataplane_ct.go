@@ -22,20 +22,20 @@ func (d *Dataplane) start() {
 
 	// generates filter events
 	d.wg.Go(func() {
-		d.logger.Info("dataplane conntrack watchdog started", "table", d.name, "period", conntrackWatchdogPeriod)
+		d.logger.Info("conntrack watchdog started", "period", conntrackWatchdogPeriod)
 		filter := conntrack.NewFilter().Status(conntrack.StatusDstNATDone)
 		ticker := time.NewTicker(conntrackWatchdogPeriod)
 		defer func() {
 			ticker.Stop()
 			close(filterChan)
-			d.logger.Info("dataplane conntrack watchdog stopped", "table", d.name)
+			d.logger.Info("conntrack watchdog stopped")
 		}()
 		for {
 			select {
 			case <-d.ctx.Done():
 				return
 			case timestamp := <-ticker.C:
-				d.logger.Info("dataplane conntrack watchdog tick", "table", d.name, "timestamp", timestamp)
+				d.logger.Debug("conntrack watchdog tick", "timestamp", timestamp)
 				flows, err := d.ct.DumpFilter(filter, nil)
 				result := ctFilterResult{make([]netip.AddrPort, 0, len(flows)), err, timestamp}
 				if err == nil {
@@ -60,10 +60,14 @@ func (d *Dataplane) start() {
 
 	// process filter events
 	d.wg.Go(func() {
-		d.logger.Info("dataplane event processor started", "table", d.name)
+		d.logger.Info("event processor started")
 		defer func() {
 			d.teardown()
-			d.logger.Info("dataplane event processor stopped", "table", d.name, "err", d.Error())
+			if err := d.Error(); err != nil {
+				d.logger.Error("event processor stopped", "err", err)
+				return
+			}
+			d.logger.Info("event processor stopped")
 		}()
 		for {
 			select {
@@ -96,7 +100,7 @@ func (d *Dataplane) processResult(result ctFilterResult) {
 	defer d.lock.Unlock()
 	if result.err != nil {
 		d.err = result.err
-		d.logger.Error("dataplane conntrack watchdog failed", "table", d.name, "err", result.err)
+		d.logger.Error("conntrack watchdog failed", "err", result.err)
 		return
 	}
 
@@ -123,8 +127,7 @@ func (d *Dataplane) processResult(result ctFilterResult) {
 	for _, group := range notSeen {
 		if result.timestamp.Sub(group.lastSeen) >= group.ttl.ToDuration() {
 			d.logger.Info(
-				"dataplane timeout candidate detected",
-				"table", d.name,
+				"timeout candidate detected",
 				"group", group.name,
 				"idle_for", result.timestamp.Sub(group.lastSeen),
 				"ttl", group.ttl.ToDuration(),

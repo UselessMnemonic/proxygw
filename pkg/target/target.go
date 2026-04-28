@@ -250,6 +250,11 @@ func (t *Target) end() {
 		t.dnat.Close(),
 		t.handler.Close(),
 	)
+	if t.err != nil {
+		t.logger.Error("close failed", "err", t.err)
+		return
+	}
+	t.logger.Info("close completed")
 }
 
 func (t *Target) start() {
@@ -257,7 +262,11 @@ func (t *Target) start() {
 		t.logger.Info("event loop started")
 		defer func() {
 			t.end()
-			t.logger.Info("event loop stopped", "state", t.State().String(), "err", t.Error())
+			if err := t.Error(); err != nil {
+				t.logger.Error("event loop stopped", "state", t.State().String(), "err", err)
+				return
+			}
+			t.logger.Info("event loop stopped", "state", t.State().String())
 		}()
 		for {
 			select {
