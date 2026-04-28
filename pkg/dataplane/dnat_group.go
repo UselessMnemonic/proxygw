@@ -281,6 +281,7 @@ func (dg *DNATGroup) clearMappings() error {
 }
 
 func (dg *DNATGroup) close() error {
+	// TODO: wait for targets/frontends to close, otherwise they see "source not mapped" errors
 	if dg.closed {
 		return nil
 	}
