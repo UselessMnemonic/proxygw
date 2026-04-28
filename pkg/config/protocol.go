@@ -2,8 +2,6 @@ package config
 
 import (
 	"fmt"
-
-	"golang.org/x/sys/unix"
 )
 
 // Protocol is an L4 protocol identifier used by frontends and targets.
@@ -11,9 +9,9 @@ type Protocol uint8
 
 const (
 	// ProtocolTCP identifies TCP.
-	ProtocolTCP Protocol = unix.IPPROTO_TCP
+	ProtocolTCP Protocol = 6
 	// ProtocolUDP identifies UDP.
-	ProtocolUDP Protocol = unix.IPPROTO_UDP
+	ProtocolUDP Protocol = 17
 )
 
 func (p Protocol) String() string {
