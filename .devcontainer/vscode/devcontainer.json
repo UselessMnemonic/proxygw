@@ -1,7 +1,7 @@
 {
-  "name": "proxy-gateway",
+  "name": "proxygw-vscode",
   "dockerComposeFile": "compose.yml",
   "service": "workspace",
-  "workspaceFolder": "/workspaces/proxy-gateway",
+  "workspaceFolder": "/workspaces/proxygw",
   "shutdownAction": "stopCompose"
 }

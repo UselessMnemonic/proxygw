@@ -1,0 +1,13 @@
+services:
+  workspace:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: dev
+    command: sleep infinity
+    working_dir: /workspaces/proxygw
+    volumes:
+      - type: bind
+        source: ../..
+        target: /workspaces/proxygw
+        consistency: cached
