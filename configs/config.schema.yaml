@@ -4,6 +4,7 @@ type: object
 additionalProperties: false
 required:
   - version
+  - log
   - plugins
   - targets
   - frontends
@@ -11,6 +12,8 @@ properties:
   version:
     type: string
     const: v1
+  log:
+    $ref: "#/$defs/log"
   plugins:
     type: object
     description: Plugin-specific configuration keyed by plugin name.
@@ -25,6 +28,21 @@ properties:
     items:
       $ref: "#/$defs/frontend"
 $defs:
+  log:
+    type: object
+    additionalProperties: false
+    required:
+      - output
+      - level
+    properties:
+      output:
+        type: string
+        description: Log destination. Use stdout, stderr, or a filesystem path.
+        minLength: 1
+      level:
+        type: string
+        description: Log level parsed by log/slog.Level.UnmarshalText.
+        minLength: 1
   protocol:
     type: string
     enum:

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -21,9 +22,19 @@ import (
 	"proxygw/pkg/target"
 )
 
-func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+func setDefaultLogger(dst io.Writer, level slog.Level) *slog.Logger {
+	options := slog.HandlerOptions{
+		Level: level,
+	}
+	handler := slog.NewTextHandler(dst, &options)
+	logger := slog.New(handler).With("component", "proxygw")
 	slog.SetDefault(logger)
+	return logger
+}
+
+func main() {
+	logger := setDefaultLogger(os.Stderr, slog.LevelInfo)
+
 	app := kingpin.New("proxygw", "Proxy gateway daemon")
 
 	configPath := app.Flag("config", "path to runtime configuration").
@@ -35,7 +46,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := run(logger.With("component", "proxygw"), *configPath)
+	err := run(logger, *configPath)
+	logger = slog.Default()
+
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
@@ -48,7 +61,20 @@ func run(logger *slog.Logger, configPath string) (err error) {
 	if err != nil {
 		return fmt.Errorf("load config %q: %w", configPath, err)
 	}
-	logger.Info("config loaded", "path", configPath)
+
+	var logout io.Writer
+	switch cfg.Log.Output {
+	case "stdout":
+		logout = os.Stdout
+	case "stderr":
+		logout = os.Stderr
+	default:
+		logout, err = os.OpenFile(cfg.Log.Output, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("open log output %q: %w", cfg.Log.Output, err)
+		}
+	}
+	logger = setDefaultLogger(logout, cfg.Log.Level)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 )
 
 // ConfigVersionV1 is the supported schema version for configuration files.
@@ -11,9 +12,16 @@ const ConfigVersionV1 = "v1"
 // Config is the root runtime configuration document.
 type Config struct {
 	Version   string                    `yaml:"version"`
+	Log       Log                       `yaml:"log"`
 	Plugins   map[string]map[string]any `yaml:"plugins"`
 	Targets   []Target                  `yaml:"targets"`
 	Frontends []Frontend                `yaml:"frontends"`
+}
+
+// Log defines process-wide structured logging behavior.
+type Log struct {
+	Output string     `yaml:"output"`
+	Level  slog.Level `yaml:"level"`
 }
 
 // Validate checks that the configuration is internally consistent and usable.
@@ -23,6 +31,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Version != ConfigVersionV1 {
 		return fmt.Errorf("unsupported version %q", c.Version)
+	}
+	if c.Log.Output == "" {
+		return errors.New("log.output is required")
 	}
 
 	for i, target := range c.Targets {
