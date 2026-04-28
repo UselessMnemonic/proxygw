@@ -1,0 +1,13 @@
+[Unit]
+Description=Proxy Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/proxygw --config /etc/proxygw.yaml
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

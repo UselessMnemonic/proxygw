@@ -1,5 +1,6 @@
 # Build artifacts
 /build/
+/cmd/proxygw/plugin.go
 
 # Go local caches (kept in-repo for local tooling)
 /.gocache/

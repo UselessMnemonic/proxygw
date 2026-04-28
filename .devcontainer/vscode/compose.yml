@@ -1,0 +1,15 @@
+services:
+  workspace:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: dev
+    command: sleep infinity
+    working_dir: /workspaces/proxygw
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - type: bind
+        source: ../..
+        target: /workspaces/proxygw
+        consistency: cached

@@ -1,0 +1,125 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: Proxy Gateway Configuration
+type: object
+additionalProperties: false
+required:
+  - version
+  - log
+  - plugins
+  - targets
+  - frontends
+properties:
+  version:
+    type: string
+    const: v1
+  log:
+    $ref: "#/$defs/log"
+  plugins:
+    type: object
+    description: Plugin-specific configuration keyed by plugin name.
+    additionalProperties:
+      type: object
+  targets:
+    type: array
+    items:
+      $ref: "#/$defs/target"
+  frontends:
+    type: array
+    items:
+      $ref: "#/$defs/frontend"
+$defs:
+  log:
+    type: object
+    additionalProperties: false
+    required:
+      - output
+      - level
+    properties:
+      output:
+        type: string
+        description: Log destination. Use stdout, stderr, or a filesystem path.
+        minLength: 1
+      level:
+        type: string
+        description: Log level parsed by log/slog.Level.UnmarshalText.
+        minLength: 1
+  protocol:
+    type: string
+    enum:
+      - tcp
+      - udp
+  namespace_ref:
+    type: string
+    pattern: '^[^:]+:[^:]+$'
+  ttl:
+    type: string
+    description: Go duration string, serialized as text and parsed by time.ParseDuration.
+    minLength: 1
+  addr_port:
+    type: string
+    description: IP address and port in Go netip.AddrPort text form.
+    minLength: 1
+  target_endpoint:
+    type: object
+    additionalProperties: false
+    required:
+      - name
+      - protocol
+      - address
+    properties:
+      name:
+        type: string
+        minLength: 1
+      protocol:
+        $ref: "#/$defs/protocol"
+      address:
+        $ref: "#/$defs/addr_port"
+  target:
+    type: object
+    additionalProperties: false
+    required:
+      - name
+      - kind
+      - idle_timeout
+      - endpoints
+    properties:
+      name:
+        type: string
+        minLength: 1
+      kind:
+        $ref: "#/$defs/namespace_ref"
+      idle_timeout:
+        $ref: "#/$defs/ttl"
+      endpoints:
+        type: array
+        minItems: 1
+        items:
+          $ref: "#/$defs/target_endpoint"
+      options:
+        type: object
+  frontend:
+    type: object
+    additionalProperties: false
+    required:
+      - name
+      - kind
+      - protocol
+      - listen
+      - flow_timeout
+      - target
+    properties:
+      name:
+        type: string
+        minLength: 1
+      kind:
+        $ref: "#/$defs/namespace_ref"
+      protocol:
+        $ref: "#/$defs/protocol"
+      listen:
+        $ref: "#/$defs/addr_port"
+      flow_timeout:
+        $ref: "#/$defs/ttl"
+      target:
+        $ref: "#/$defs/namespace_ref"
+      options:
+        type: object
