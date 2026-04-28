@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
-	"proxygw/pkg/config"
-	"proxygw/pkg/dataplane"
-	"proxygw/pkg/frontend"
-	"proxygw/pkg/target"
 	"slices"
 	"sync"
+
+	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
+	"github.com/UselessMnemonic/proxygw/pkg/frontend"
+	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
 
 // Engine is the top-level runtime object for embedding or supervising a proxy

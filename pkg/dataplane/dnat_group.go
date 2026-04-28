@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"maps"
 	"net/netip"
-	"proxygw/pkg/config"
 	"slices"
 	"time"
+
+	"github.com/UselessMnemonic/proxygw/pkg/config"
 
 	"github.com/google/nftables"
 )

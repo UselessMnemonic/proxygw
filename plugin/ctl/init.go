@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"proxygw/pkg/engine"
-	"proxygw/plugin"
-	"proxygw/plugin/ctl/ipc"
-	"proxygw/plugin/ctl/ipc/codec"
+
+	"github.com/UselessMnemonic/proxygw/pkg/engine"
+	"github.com/UselessMnemonic/proxygw/plugin"
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc"
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc/codec"
 )
 
 var ctx context.Context

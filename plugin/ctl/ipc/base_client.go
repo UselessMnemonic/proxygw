@@ -2,8 +2,9 @@ package ipc
 
 import (
 	"errors"
-	"proxygw/plugin/ctl/ipc/method"
 	"sync"
+
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc/method"
 )
 
 // BaseClient is a one-way IPC client that can send requests and receive

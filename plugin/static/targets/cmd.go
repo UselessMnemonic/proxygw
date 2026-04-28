@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"time"
 
-	"proxygw/pkg/target"
+	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
 
 const cmdStopTimeout = 5 * time.Second

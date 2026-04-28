@@ -1,7 +1,7 @@
 package targets
 
 import (
-	"proxygw/pkg/target"
+	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
 
 // NoneHandler is a no-op target driver useful for tests and static endpoints.

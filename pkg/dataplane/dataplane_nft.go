@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net/netip"
-	"proxygw/pkg/config"
+
+	"github.com/UselessMnemonic/proxygw/pkg/config"
 
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"

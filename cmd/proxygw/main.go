@@ -15,11 +15,11 @@ import (
 	"github.com/alecthomas/kingpin/v2"
 	"gopkg.in/yaml.v3"
 
-	"proxygw/internal/plugin"
-	"proxygw/pkg/config"
-	"proxygw/pkg/engine"
-	"proxygw/pkg/frontend"
-	"proxygw/pkg/target"
+	"github.com/UselessMnemonic/proxygw/internal/plugin"
+	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/engine"
+	"github.com/UselessMnemonic/proxygw/pkg/frontend"
+	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
 
 func setDefaultLogger(dst io.Writer, level slog.Level) *slog.Logger {

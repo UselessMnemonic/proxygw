@@ -2,8 +2,9 @@ package ipc
 
 import (
 	"net"
-	"proxygw/plugin/ctl/ipc/codec"
 	"time"
+
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc/codec"
 )
 
 // Conn wraps a net.Conn with packet encoding and decoding.

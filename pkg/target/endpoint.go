@@ -2,7 +2,8 @@ package target
 
 import (
 	"net/netip"
-	"proxygw/pkg/config"
+
+	"github.com/UselessMnemonic/proxygw/pkg/config"
 )
 
 // Endpoint represents a specific endpoint on which a target expects to receive traffic.

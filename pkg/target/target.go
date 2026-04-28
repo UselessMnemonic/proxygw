@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
-	"proxygw/pkg/config"
-	"proxygw/pkg/dataplane"
 	"slices"
 	"sync"
+
+	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
 )
 
 // Target is a managed backend that can be warmed before traffic is routed to it

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/config"
 
 	"github.com/google/nftables"
 	"golang.org/x/sys/unix"

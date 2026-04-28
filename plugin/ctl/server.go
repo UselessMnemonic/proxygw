@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"proxygw/pkg/engine"
-	"proxygw/pkg/frontend"
-	"proxygw/pkg/target"
-	"proxygw/plugin/ctl/ipc"
-	"proxygw/plugin/ctl/ipc/method"
 	"slices"
+
+	"github.com/UselessMnemonic/proxygw/pkg/engine"
+	"github.com/UselessMnemonic/proxygw/pkg/frontend"
+	"github.com/UselessMnemonic/proxygw/pkg/target"
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc"
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc/method"
 )
 
 // Server handles control IPC requests against an Engine.

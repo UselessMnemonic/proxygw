@@ -1,10 +1,10 @@
 package static
 
 import (
-	"proxygw/pkg/engine"
-	"proxygw/plugin"
-	"proxygw/plugin/static/frontends"
-	"proxygw/plugin/static/targets"
+	"github.com/UselessMnemonic/proxygw/pkg/engine"
+	"github.com/UselessMnemonic/proxygw/plugin"
+	"github.com/UselessMnemonic/proxygw/plugin/static/frontends"
+	"github.com/UselessMnemonic/proxygw/plugin/static/targets"
 )
 
 func init() {

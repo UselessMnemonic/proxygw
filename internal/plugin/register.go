@@ -2,10 +2,11 @@ package plugin
 
 import (
 	"fmt"
-	"proxygw/pkg/engine"
-	"proxygw/pkg/frontend"
-	"proxygw/pkg/target"
 	"sync"
+
+	"github.com/UselessMnemonic/proxygw/pkg/engine"
+	"github.com/UselessMnemonic/proxygw/pkg/frontend"
+	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
 
 // Namespace is the table a plugin fills with the kinds it exposes.

@@ -2,7 +2,8 @@ package frontend
 
 import (
 	"net/netip"
-	"proxygw/pkg/config"
+
+	"github.com/UselessMnemonic/proxygw/pkg/config"
 )
 
 // Handler manages the lifecycle of a frontend.

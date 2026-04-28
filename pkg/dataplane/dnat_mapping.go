@@ -3,7 +3,8 @@ package dataplane
 import (
 	"fmt"
 	"net/netip"
-	"proxygw/pkg/config"
+
+	"github.com/UselessMnemonic/proxygw/pkg/config"
 )
 
 // DNATMapping defines to where a host endpoint shall be forwarded, including for what protocol.

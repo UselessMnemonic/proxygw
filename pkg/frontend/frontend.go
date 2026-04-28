@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"proxygw/pkg/config"
-	"proxygw/pkg/dataplane"
-	"proxygw/pkg/target"
 	"sync"
+
+	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
+	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
 
 // Frontend is a managed listener that can be started and stopped independently

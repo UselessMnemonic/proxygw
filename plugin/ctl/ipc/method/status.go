@@ -1,7 +1,7 @@
 package method
 
 import (
-	"proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/config"
 )
 
 // StatusRequest asks the proxy engine for status details.

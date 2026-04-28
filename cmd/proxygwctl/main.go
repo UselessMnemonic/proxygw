@@ -9,9 +9,9 @@ import (
 	"github.com/alecthomas/kingpin/v2"
 	"gopkg.in/yaml.v3"
 
-	"proxygw/pkg/config"
-	"proxygw/plugin/ctl/ipc"
-	"proxygw/plugin/ctl/ipc/codec"
+	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc"
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc/codec"
 )
 
 func main() {

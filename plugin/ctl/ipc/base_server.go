@@ -2,8 +2,9 @@ package ipc
 
 import (
 	"errors"
-	"proxygw/plugin/ctl/ipc/method"
 	"sync"
+
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc/method"
 )
 
 // BaseServer is a one-way IPC server that receives requests and sends

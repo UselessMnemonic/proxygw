@@ -2,9 +2,10 @@ package ipc
 
 import (
 	"errors"
-	"proxygw/plugin/ctl/ipc/codec"
-	"proxygw/plugin/ctl/ipc/method"
 	"sync"
+
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc/codec"
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc/method"
 )
 
 // BasePeer is a bidirectional IPC peer that can send and receive requests.

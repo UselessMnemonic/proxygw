@@ -10,8 +10,8 @@ import (
 	"net/netip"
 	"time"
 
-	"proxygw/pkg/config"
-	"proxygw/pkg/frontend"
+	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/frontend"
 )
 
 const httpShutdownTimeout = 5 * time.Second

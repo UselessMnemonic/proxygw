@@ -1,4 +1,4 @@
-module proxygw
+module github.com/UselessMnemonic/proxygw
 
 go 1.25.0
 

@@ -3,8 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
-	"proxygw/plugin/ctl/ipc"
-	"proxygw/plugin/ctl/ipc/method"
+
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc"
+	"github.com/UselessMnemonic/proxygw/plugin/ctl/ipc/method"
 )
 
 // Client is a small typed wrapper around the control IPC client.

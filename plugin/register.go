@@ -1,7 +1,7 @@
 package plugin
 
 import (
-	internal "proxygw/internal/plugin"
+	internal "github.com/UselessMnemonic/proxygw/internal/plugin"
 )
 
 // Handler defines plugin lifecycle hooks.

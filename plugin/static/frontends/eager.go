@@ -2,9 +2,10 @@ package frontends
 
 import (
 	"net/netip"
-	"proxygw/pkg/config"
-	"proxygw/pkg/frontend"
 	"time"
+
+	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/frontend"
 )
 
 const eagerWarmInterval = time.Second

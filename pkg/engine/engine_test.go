@@ -12,9 +12,9 @@ import (
 	"github.com/google/nftables"
 	"golang.org/x/sys/unix"
 
-	"proxygw/pkg/config"
-	"proxygw/pkg/frontend"
-	"proxygw/pkg/target"
+	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/frontend"
+	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
 
 func TestNew(t *testing.T) {

@@ -2,8 +2,9 @@ package dataplane
 
 import (
 	"net/netip"
-	"proxygw/pkg/config"
 	"testing"
+
+	"github.com/UselessMnemonic/proxygw/pkg/config"
 )
 
 func TestDNATMappingOverlaps(t *testing.T) {

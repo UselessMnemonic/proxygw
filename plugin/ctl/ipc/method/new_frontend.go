@@ -1,7 +1,7 @@
 package method
 
 import (
-	"proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/config"
 )
 
 // NewFrontendRequest asks the plugin to construct a frontend driver instance.
