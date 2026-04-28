@@ -14,6 +14,9 @@ import (
 	"sync"
 )
 
+// Engine is the top-level runtime object for embedding or supervising a proxy
+// gateway. Register driver kinds first, then create targets, then create and
+// start frontends that point at those targets.
 type Engine struct {
 	dplane        *dataplane.Dataplane
 	frontends     map[string]*frontend.Frontend
@@ -29,6 +32,9 @@ type Engine struct {
 	closed bool
 }
 
+// New prepares a gateway engine with the given name. Keep this name stable
+// across restarts for the same gateway instance because it is used for
+// dataplane resources.
 func New(ctx context.Context, name string) (*Engine, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	logger := slog.Default().With("component", "engine", "name", name)
@@ -58,6 +64,8 @@ func New(ctx context.Context, name string) (*Engine, error) {
 	return e, nil
 }
 
+// Close requests shutdown. Close does not wait; call Wait when the caller must
+// know that managed targets and frontends have finished.
 func (e *Engine) Close() {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -68,17 +76,24 @@ func (e *Engine) Close() {
 	e.cancel()
 }
 
+// Wait blocks until shutdown has been requested and all resource goroutines
+// known to the engine have exited.
 func (e *Engine) Wait() {
 	<-e.ctx.Done()
 	e.wg.Wait()
 }
 
+// Closed reports whether the engine is refusing new work because shutdown has
+// started.
 func (e *Engine) Closed() bool {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.closed
 }
 
+// AddFrontendKind makes a frontend implementation available to configuration
+// and API calls. Names are conventionally namespace-qualified, such as
+// "static:http".
 func (e *Engine) AddFrontendKind(name string, kind frontend.HandlerCtor) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -94,18 +109,24 @@ func (e *Engine) AddFrontendKind(name string, kind frontend.HandlerCtor) error {
 	return nil
 }
 
+// FrontendKind returns the constructor registered with the given name, or nil
+// when that kind is unknown.
 func (e *Engine) FrontendKind(name string) frontend.HandlerCtor {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.frontendCtors[name]
 }
 
+// FrontendKinds returns a snapshot of known frontend constructors. The order is
+// not stable.
 func (e *Engine) FrontendKinds() []frontend.HandlerCtor {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return slices.Collect(maps.Values(e.frontendCtors))
 }
 
+// DelFrontendKind unregisters a frontend implementation so new frontends can no
+// longer use it.
 func (e *Engine) DelFrontendKind(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -126,6 +147,8 @@ func (e *Engine) DelFrontendKind(name string) error {
 	return nil
 }
 
+// AddTargetKind makes a target implementation available to configuration and
+// API calls. Names are conventionally namespace-qualified, such as "static:cmd".
 func (e *Engine) AddTargetKind(name string, kind target.HandlerCtor) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -141,18 +164,24 @@ func (e *Engine) AddTargetKind(name string, kind target.HandlerCtor) error {
 	return nil
 }
 
+// GetTargetKind returns the constructor registered with the given name, or nil
+// when that kind is unknown.
 func (e *Engine) GetTargetKind(name string) target.HandlerCtor {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.targetCtors[name]
 }
 
+// TargetKinds returns a snapshot of known target constructors. The order is not
+// stable.
 func (e *Engine) TargetKinds() []target.HandlerCtor {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return slices.Collect(maps.Values(e.targetCtors))
 }
 
+// DelTargetKind unregisters a target implementation so new targets can no
+// longer use it.
 func (e *Engine) DelTargetKind(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -173,6 +202,8 @@ func (e *Engine) DelTargetKind(name string) error {
 	return nil
 }
 
+// NewTarget creates a target from the given configuration. Target names must be
+// unique for the lifetime of the engine unless a closed target is deleted first.
 func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -214,18 +245,23 @@ func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 	return t, nil
 }
 
+// GetTarget returns the target with the given name, or nil when it is not
+// registered.
 func (e *Engine) GetTarget(name string) *target.Target {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.targets[name]
 }
 
+// Targets returns a snapshot of registered targets. The order is not stable.
 func (e *Engine) Targets() []*target.Target {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return slices.Collect(maps.Values(e.targets))
 }
 
+// DelTarget forgets a closed target. Live targets must be closed by their owner
+// before deletion.
 func (e *Engine) DelTarget(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -244,6 +280,8 @@ func (e *Engine) DelTarget(name string) error {
 	return nil
 }
 
+// NewFrontend creates a frontend from the given configuration. The referenced
+// target and endpoint must already exist.
 func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -293,18 +331,24 @@ func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 	return f, nil
 }
 
+// GetFrontend returns the frontend with the given name, or nil when it is not
+// registered.
 func (e *Engine) GetFrontend(name string) *frontend.Frontend {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return e.frontends[name]
 }
 
+// Frontends returns a snapshot of registered frontends. The order is not
+// stable.
 func (e *Engine) Frontends() []*frontend.Frontend {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return slices.Collect(maps.Values(e.frontends))
 }
 
+// DelFrontend forgets a closed frontend. Live frontends must be closed by their
+// owner before deletion.
 func (e *Engine) DelFrontend(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()

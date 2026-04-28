@@ -39,10 +39,12 @@ const (
 	MethodFrontendShouldWarmNotification uint16 = iota + 32768
 )
 
+// Method is implemented by every typed IPC payload.
 type Method interface {
 	Method() uint16
 }
 
+// IsResponse reports whether method is a response method ID.
 func IsResponse(method uint16) bool {
 	if method >= 32768 {
 		return false

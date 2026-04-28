@@ -11,6 +11,7 @@ func (NewTargetRequest) Method() uint16 {
 	return MethodNewTargetRequest
 }
 
+// NewTargetResponse confirms the target driver was created.
 type NewTargetResponse struct{}
 
 func (NewTargetResponse) Method() uint16 {

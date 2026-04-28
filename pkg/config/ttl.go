@@ -43,14 +43,17 @@ func (t TTL) ToDuration() time.Duration {
 	return time.Duration(t) * time.Second
 }
 
+// String formats t as a Go duration string in whole seconds.
 func (t TTL) String() string {
 	return fmt.Sprintf("%ds", t.Seconds())
 }
 
+// MarshalText returns the timeout as whole seconds, such as "30s".
 func (t TTL) MarshalText() ([]byte, error) {
 	return []byte(t.String()), nil
 }
 
+// UnmarshalText decodes a duration string into whole seconds.
 func (t *TTL) UnmarshalText(text []byte) error {
 	ttlString := string(text)
 	result, err := ParseTTL(ttlString)

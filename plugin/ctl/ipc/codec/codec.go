@@ -31,6 +31,8 @@ type Codec interface {
 	UnwrapRaw(any) []byte
 }
 
+// FindByName returns the built-in codec with the given name, or nil when the
+// name is unknown.
 func FindByName(name string) Codec {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "json":

@@ -6,6 +6,8 @@ import (
 	"sync"
 )
 
+// BaseServer is a one-way IPC server that receives requests and sends
+// responses.
 type BaseServer struct {
 	conn   *Conn
 	notifs chan Packet

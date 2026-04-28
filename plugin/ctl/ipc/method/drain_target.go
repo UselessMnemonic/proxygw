@@ -9,6 +9,7 @@ func (DrainTargetRequest) Method() uint16 {
 	return MethodDrainTargetRequest
 }
 
+// DrainTargetResponse confirms the target drain request was accepted.
 type DrainTargetResponse struct{}
 
 func (DrainTargetResponse) Method() uint16 {

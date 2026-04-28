@@ -11,6 +11,8 @@ import (
 	"sync"
 )
 
+// Frontend is a managed listener that can be started and stopped independently
+// while keeping its configured route to a target endpoint.
 type Frontend struct {
 	name    string
 	kind    string
@@ -30,6 +32,9 @@ type Frontend struct {
 	state  State
 }
 
+// New builds a frontend around a driver handler and reserves its dataplane
+// mapping. The caller still needs to call Start before the listener accepts
+// traffic.
 func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, handler Handler, cfg config.Frontend) (*Frontend, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
@@ -76,55 +81,68 @@ func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, h
 	return f, nil
 }
 
+// Name returns the configuration name for this frontend.
 func (f *Frontend) Name() string {
 	return f.name
 }
 
+// Kind returns the frontend implementation name used to create this instance.
 func (f *Frontend) Kind() string {
 	return f.kind
 }
 
+// Target returns the target this frontend forwards to.
 func (f *Frontend) Target() *target.Target {
 	return f.target
 }
 
+// Endpoint returns the target endpoint selected by this frontend.
 func (f *Frontend) Endpoint() target.Endpoint {
 	return f.endpoint
 }
 
+// Protocol returns the transport protocol accepted by this frontend.
 func (f *Frontend) Protocol() config.Protocol {
 	return f.mapping.Protocol
 }
 
+// Listen returns the local address clients connect to.
 func (f *Frontend) Listen() string {
 	return f.mapping.Source.String()
 }
 
+// ProxyAddress returns the current backend address used by the dataplane.
 func (f *Frontend) ProxyAddress() string {
 	return f.mapping.Destination.String()
 }
 
+// State returns the frontend's latest lifecycle state.
 func (f *Frontend) State() State {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 	return f.state
 }
 
+// Error returns the last lifecycle error, if any.
 func (f *Frontend) Error() error {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 	return f.err
 }
 
+// Wait blocks until the frontend has closed and its event loop has exited.
 func (f *Frontend) Wait() {
 	<-f.ctx.Done()
 	f.wg.Wait()
 }
 
+// Close requests permanent shutdown of the frontend.
 func (f *Frontend) Close() {
 	f.cancel()
 }
 
+// Start requests that the frontend begin accepting traffic. It returns false
+// when a conflicting stop is already in progress.
 func (f *Frontend) Start() bool {
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -143,6 +161,8 @@ func (f *Frontend) Start() bool {
 	}
 }
 
+// Stop requests that the frontend stop accepting traffic. It returns false when
+// a conflicting start is already in progress.
 func (f *Frontend) Stop() bool {
 	f.lock.Lock()
 	defer f.lock.Unlock()

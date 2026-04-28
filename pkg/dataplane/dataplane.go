@@ -9,6 +9,8 @@ import (
 	"github.com/ti-mo/conntrack"
 )
 
+// Dataplane owns the host networking resources used to route frontend traffic
+// to warmed targets.
 type Dataplane struct {
 	name       string
 	ct         *conntrack.Conn
@@ -32,6 +34,8 @@ type Dataplane struct {
 	closed bool
 }
 
+// New prepares dataplane resources for the given gateway name. Call Close when
+// the owning engine or process is shutting down.
 func New(ctx context.Context, name string) (*Dataplane, error) {
 	ct, err := conntrack.Dial(nil)
 	if err != nil {
@@ -69,12 +73,15 @@ func New(ctx context.Context, name string) (*Dataplane, error) {
 	return d, nil
 }
 
+// Error returns the last dataplane error observed by the background worker, if
+// any.
 func (d *Dataplane) Error() error {
 	d.lock.RLock()
 	defer d.lock.RUnlock()
 	return d.err
 }
 
+// Close requests dataplane shutdown. It is safe to call more than once.
 func (d *Dataplane) Close() {
 	d.lock.Lock()
 	defer d.lock.Unlock()
@@ -85,6 +92,7 @@ func (d *Dataplane) Close() {
 	d.cancel()
 }
 
+// Wait blocks until dataplane shutdown has completed.
 func (d *Dataplane) Wait() {
 	<-d.ctx.Done()
 	d.wg.Wait()

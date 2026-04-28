@@ -9,6 +9,7 @@ func (WarmTargetRequest) Method() uint16 {
 	return MethodWarmTargetRequest
 }
 
+// WarmTargetResponse confirms the target warm request was accepted.
 type WarmTargetResponse struct{}
 
 func (WarmTargetResponse) Method() uint16 {

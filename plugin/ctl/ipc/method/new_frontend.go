@@ -17,6 +17,7 @@ func (NewFrontendRequest) Method() uint16 {
 	return MethodNewFrontendRequest
 }
 
+// NewFrontendResponse confirms the frontend driver was created.
 type NewFrontendResponse struct{}
 
 func (NewFrontendResponse) Method() uint16 {

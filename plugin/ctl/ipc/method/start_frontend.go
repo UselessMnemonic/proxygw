@@ -9,6 +9,7 @@ func (StartFrontendRequest) Method() uint16 {
 	return MethodStartFrontendRequest
 }
 
+// StartFrontendResponse confirms the frontend start request was accepted.
 type StartFrontendResponse struct{}
 
 func (StartFrontendResponse) Method() uint16 {

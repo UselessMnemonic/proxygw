@@ -22,6 +22,7 @@ func (StatusResponse) Method() uint16 {
 	return MethodStatusResponse
 }
 
+// TargetStatus is the control API view of one target.
 type TargetStatus struct {
 	Name      string               `json:"name"`
 	Kind      string               `json:"kind"`
@@ -30,12 +31,14 @@ type TargetStatus struct {
 	Endpoints []TargetEndpointInfo `json:"endpoints,omitempty"`
 }
 
+// TargetEndpointInfo is the control API view of one target endpoint.
 type TargetEndpointInfo struct {
 	Name     string          `json:"name"`
 	Protocol config.Protocol `json:"protocol"`
 	Address  string          `json:"address"`
 }
 
+// FrontendStatus is the control API view of one frontend.
 type FrontendStatus struct {
 	Name         string          `json:"name"`
 	Kind         string          `json:"kind"`

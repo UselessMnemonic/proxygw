@@ -16,6 +16,7 @@ const (
 	Closed State = 5
 )
 
+// String returns the stable lowercase name used in logs and status responses.
 func (it State) String() string {
 	switch it {
 	case Stopped:

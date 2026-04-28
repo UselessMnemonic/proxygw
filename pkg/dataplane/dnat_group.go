@@ -21,7 +21,8 @@ type flowInfo struct {
 	timeoutRule *nftables.Rule
 }
 
-// DNATGroup represents a logical group of DNATMapping
+// DNATGroup collects the mappings for one target. Enable and Disable switch the
+// whole group in and out of the live dataplane.
 type DNATGroup struct {
 	dplane        *Dataplane
 	name          string
@@ -34,6 +35,7 @@ type DNATGroup struct {
 	closed        bool
 }
 
+// NewDNATGroup reserves a mapping group with the given name.
 func (d *Dataplane) NewDNATGroup(name string, ttl config.TTL) (*DNATGroup, error) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
@@ -59,34 +61,40 @@ func (d *Dataplane) NewDNATGroup(name string, ttl config.TTL) (*DNATGroup, error
 	return dg, nil
 }
 
-// Name retrieves the name of the group
+// Name returns the group name.
 func (dg *DNATGroup) Name() string {
 	return dg.name
 }
 
-// Timeout retrieves a channel which emits timeout events. See DNATGroupTimeoutEvent
+// Timeout returns idle notifications for the group.
 func (dg *DNATGroup) Timeout() <-chan DNATGroupTimeoutEvent {
 	return dg.timeouts
 }
 
+// IsEnabled reports whether this group's mappings are currently installed.
 func (dg *DNATGroup) IsEnabled() bool {
 	dg.dplane.lock.RLock()
 	defer dg.dplane.lock.RUnlock()
 	return dg.enabled
 }
 
+// GroupTimeout returns the idle timeout used to decide when the whole target
+// can be drained.
 func (dg *DNATGroup) GroupTimeout() config.TTL {
 	dg.dplane.lock.RLock()
 	defer dg.dplane.lock.RUnlock()
 	return dg.ttl
 }
 
+// SetGroupTimeout updates the idle timeout used for future drain decisions.
 func (dg *DNATGroup) SetGroupTimeout(ttl config.TTL) {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
 	dg.ttl = ttl
 }
 
+// FlowTimeout returns the conntrack timeout configured for a source/protocol
+// mapping.
 func (dg *DNATGroup) FlowTimeout(source netip.AddrPort, protocol config.Protocol) (config.TTL, error) {
 	dg.dplane.lock.RLock()
 	defer dg.dplane.lock.RUnlock()
@@ -97,6 +105,7 @@ func (dg *DNATGroup) FlowTimeout(source netip.AddrPort, protocol config.Protocol
 	return m.FlowTimeout, nil
 }
 
+// SetFlowTimeout changes the conntrack timeout for an existing mapping.
 func (dg *DNATGroup) SetFlowTimeout(source netip.AddrPort, protocol config.Protocol, ttl config.TTL) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
@@ -115,30 +124,36 @@ func (dg *DNATGroup) SetFlowTimeout(source netip.AddrPort, protocol config.Proto
 	return nil
 }
 
+// Mappings returns a snapshot of this group's mappings. The order is not
+// stable.
 func (dg *DNATGroup) Mappings() []DNATMapping {
 	dg.dplane.lock.RLock()
 	defer dg.dplane.lock.RUnlock()
 	return dg.mappings()
 }
 
+// AddMappings adds one or more non-overlapping mappings to the group.
 func (dg *DNATGroup) AddMappings(mappings ...DNATMapping) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
 	return dg.addMappings(mappings)
 }
 
+// DelMappings removes exact mappings from the group.
 func (dg *DNATGroup) DelMappings(mappings ...DNATMapping) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
 	return dg.delMappings(mappings)
 }
 
+// ClearMappings removes every mapping from the group.
 func (dg *DNATGroup) ClearMappings() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
 	return dg.clearMappings()
 }
 
+// Enable installs this group's mappings so traffic can be forwarded.
 func (dg *DNATGroup) Enable() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
@@ -154,6 +169,7 @@ func (dg *DNATGroup) Enable() error {
 	return err
 }
 
+// Disable removes this group's mappings from the live dataplane.
 func (dg *DNATGroup) Disable() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()

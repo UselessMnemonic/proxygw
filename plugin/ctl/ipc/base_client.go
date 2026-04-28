@@ -6,6 +6,8 @@ import (
 	"sync"
 )
 
+// BaseClient is a one-way IPC client that can send requests and receive
+// notifications.
 type BaseClient struct {
 	conn   *Conn
 	notifs chan Packet

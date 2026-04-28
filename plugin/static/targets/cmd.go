@@ -12,6 +12,8 @@ import (
 
 const cmdStopTimeout = 5 * time.Second
 
+// CmdHandler is a target driver that runs a shell command while the target is
+// warm.
 type CmdHandler struct {
 	command string
 	logger  *slog.Logger
@@ -20,6 +22,7 @@ type CmdHandler struct {
 	done chan error
 }
 
+// Warm starts the configured command if it is not already running.
 func (h *CmdHandler) Warm() error {
 	if h.cmd != nil {
 		h.logger.Info("command already started")
@@ -44,6 +47,7 @@ func (h *CmdHandler) Warm() error {
 	return nil
 }
 
+// Drain interrupts the configured command and waits briefly before killing it.
 func (h *CmdHandler) Drain() error {
 	cmd := h.cmd
 	done := h.done
@@ -88,10 +92,13 @@ func (h *CmdHandler) Drain() error {
 	}
 }
 
+// Close stops the command if it is still running.
 func (h *CmdHandler) Close() error {
 	return h.Drain()
 }
 
+// NewCmdHandler creates a cmd target from options. The "command" option is
+// required.
 func NewCmdHandler(name string, options map[string]any) (target.Handler, error) {
 	command, ok := options["command"].(string)
 	if !ok || command == "" {

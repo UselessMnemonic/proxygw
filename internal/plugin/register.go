@@ -8,16 +8,19 @@ import (
 	"sync"
 )
 
+// Namespace is the table a plugin fills with the kinds it exposes.
 type Namespace struct {
 	Frontends map[string]frontend.HandlerCtor
 	Targets   map[string]target.HandlerCtor
 }
 
+// Handler defines the optional lifecycle hooks for a registered plugin.
 type Handler struct {
 	OnLoad   func(config map[string]any, engine *engine.Engine, namespace *Namespace) error
 	OnUnload func() error
 }
 
+// Register adds a plugin handler to the process-local registry.
 func Register(name string, handler Handler) error {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
@@ -28,6 +31,7 @@ func Register(name string, handler Handler) error {
 	return nil
 }
 
+// Export returns the process-local plugin registry.
 func Export() map[string]Handler {
 	return registry.handlers
 }

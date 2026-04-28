@@ -14,6 +14,8 @@ const (
 	ProtocolUDP Protocol = 17
 )
 
+// String returns the lowercase protocol name used in configuration and status
+// output.
 func (p Protocol) String() string {
 	switch p {
 	case ProtocolTCP:
@@ -42,10 +44,12 @@ func ParseProtocol(s string) (Protocol, error) {
 	}
 }
 
+// MarshalText returns the lowercase protocol name.
 func (p Protocol) MarshalText() ([]byte, error) {
 	return []byte(p.String()), nil
 }
 
+// UnmarshalText decodes a protocol name such as "tcp" or "udp".
 func (p *Protocol) UnmarshalText(text []byte) error {
 	result, err := ParseProtocol(string(text))
 	if err != nil {

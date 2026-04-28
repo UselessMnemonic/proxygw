@@ -9,6 +9,7 @@ func (CloseTargetRequest) Method() uint16 {
 	return MethodCloseTargetRequest
 }
 
+// CloseTargetResponse confirms the target close request was accepted.
 type CloseTargetResponse struct{}
 
 func (CloseTargetResponse) Method() uint16 {

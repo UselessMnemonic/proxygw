@@ -7,6 +7,7 @@ import (
 	"sync"
 )
 
+// BasePeer is a bidirectional IPC peer that can send and receive requests.
 type BasePeer struct {
 	conn   *Conn
 	notifs chan Packet
@@ -174,6 +175,8 @@ func MakePacket[M method.Method](id uint32, body M) Packet {
 	}
 }
 
+// ParseRawBody replaces a packet's raw payload with the concrete method type
+// indicated by packet.Method.
 func ParseRawBody(codec codec.Codec, packet *Packet) error {
 	raw := packet.Body.([]byte)
 	switch packet.Method {

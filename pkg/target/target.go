@@ -12,6 +12,8 @@ import (
 	"sync"
 )
 
+// Target is a managed backend that can be warmed before traffic is routed to it
+// and drained after it becomes idle.
 type Target struct {
 	name    string
 	kind    string
@@ -30,6 +32,8 @@ type Target struct {
 	state  State
 }
 
+// New builds a target around a driver handler. The returned target starts
+// inactive; call Warm before expecting it to serve traffic.
 func New(ctx context.Context, dnat *dataplane.DNATGroup, handler Handler, cfg config.Target) (*Target, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
@@ -76,30 +80,36 @@ func New(ctx context.Context, dnat *dataplane.DNATGroup, handler Handler, cfg co
 	return t, nil
 }
 
+// Name returns the configuration name for this target.
 func (t *Target) Name() string {
 	return t.name
 }
 
+// Kind returns the target implementation name used to create this instance.
 func (t *Target) Kind() string {
 	return t.kind
 }
 
+// DNATGroup returns the dataplane group owned by this target.
 func (t *Target) DNATGroup() *dataplane.DNATGroup {
 	return t.dnat
 }
 
+// State returns the target's latest lifecycle state.
 func (t *Target) State() State {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	return t.state
 }
 
+// Error returns the last lifecycle error, if any.
 func (t *Target) Error() error {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	return t.err
 }
 
+// Endpoint returns the configured endpoint with the given name.
 func (t *Target) Endpoint(name string) (Endpoint, bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -107,12 +117,15 @@ func (t *Target) Endpoint(name string) (Endpoint, bool) {
 	return ep, exists
 }
 
+// Endpoints returns a snapshot of this target's configured endpoints. The order
+// is not stable.
 func (t *Target) Endpoints() []Endpoint {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	return slices.Collect(maps.Values(t.endpoints))
 }
 
+// AddEndpoint adds an endpoint for future frontend bindings.
 func (t *Target) AddEndpoint(endpoint Endpoint) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -130,6 +143,8 @@ func (t *Target) AddEndpoint(endpoint Endpoint) error {
 	return nil
 }
 
+// RemoveEndpoint removes an endpoint by name. Existing frontend bindings are
+// not automatically rewritten.
 func (t *Target) RemoveEndpoint(name string) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -145,6 +160,8 @@ func (t *Target) RemoveEndpoint(name string) error {
 	return nil
 }
 
+// Warm requests that the target prepare to receive traffic. It returns false
+// when a conflicting drain or close is in progress.
 func (t *Target) Warm() bool {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -163,6 +180,8 @@ func (t *Target) Warm() bool {
 	}
 }
 
+// Drain requests that the target stop serving traffic and release resources. It
+// returns false when a conflicting warm or close is in progress.
 func (t *Target) Drain() bool {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -181,10 +200,12 @@ func (t *Target) Drain() bool {
 	}
 }
 
+// Close requests permanent shutdown of the target.
 func (t *Target) Close() {
 	t.cancel()
 }
 
+// Wait blocks until the target has closed and its event loop has exited.
 func (t *Target) Wait() {
 	<-t.ctx.Done()
 	t.wg.Wait()

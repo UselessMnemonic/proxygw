@@ -12,11 +12,13 @@ import (
 	"slices"
 )
 
+// Server handles control IPC requests against an Engine.
 type Server struct {
 	*ipc.BaseServer
 	engine *engine.Engine
 }
 
+// NewServer binds a control server to conn.
 func NewServer(conn *ipc.Conn, engine *engine.Engine) *Server {
 	if engine == nil {
 		panic("engine must not be nil")
@@ -31,6 +33,7 @@ func NewServer(conn *ipc.Conn, engine *engine.Engine) *Server {
 	return s
 }
 
+// Serve processes requests until ctx is canceled or the connection closes.
 func (s *Server) Serve(ctx context.Context) error {
 	for {
 		select {
