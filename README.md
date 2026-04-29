@@ -134,9 +134,9 @@ Addresses use Go `netip.AddrPort` syntax, such as `127.0.0.1:8080`, `0.0.0.0:80`
 
 The daemon loads config, constructs an engine, loads registered plugins, and asks each plugin to fill a namespace of frontend and target constructors. The engine then creates targets before frontends.
 
-A target owns a DNAT group and a target driver. When a target is warmed, the driver starts or prepares the backend and the DNAT group is enabled. When the dataplane reports idle timeout, the target drains and DNAT is disabled.
+A target owns a DNAT group and a target handler. When a target is warmed, the handler starts or prepares the backend and the DNAT group is enabled. When the dataplane reports idle timeout, the target drains and DNAT is disabled.
 
-A frontend owns a frontend driver and a DNAT mapping from its configured `listen` address to the selected target endpoint. Frontend drivers can emit warm signals through `ShouldWarm`; the engine forwards those signals to the target.
+A frontend owns a frontend handler and a DNAT mapping from its configured `listen` address to the selected target endpoint. Frontend handlers can emit warm signals through `ShouldWarm`; the engine forwards those signals to the target.
 
 ## Plugins
 

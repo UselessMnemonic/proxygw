@@ -16,7 +16,7 @@ import (
 )
 
 // Engine is the top-level runtime object for embedding or supervising a proxy
-// gateway. Register driver kinds first, then create targets, then create and
+// gateway. Register handler kinds first, then create targets, then create and
 // start frontends that point at those targets.
 type Engine struct {
 	dplane        *dataplane.Dataplane
@@ -222,9 +222,9 @@ func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 		return nil, fmt.Errorf("lookup kind %q: %w", cfg.Kind, ErrTargetKindNotRegistered)
 	}
 
-	driver, err := factory(cfg.Name, cfg.Options)
+	handler, err := factory(cfg.Name, cfg.Options)
 	if err != nil {
-		return nil, fmt.Errorf("driver for kind %q: %w", cfg.Kind, err)
+		return nil, fmt.Errorf("handler for kind %q: %w", cfg.Kind, err)
 	}
 
 	dnat, err := e.dplane.NewDNATGroup(cfg.Name, cfg.IdleTimeout)
@@ -232,12 +232,12 @@ func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 		return nil, fmt.Errorf("flow group: %w", err)
 	}
 
-	t, err := target.New(e.ctx, dnat, driver, cfg)
+	t, err := target.New(e.ctx, dnat, handler, cfg)
 	if err != nil {
 		return nil, errors.Join(
 			err,
+			handler.Close(),
 			dnat.Close(),
-			driver.Close(),
 		)
 	}
 
@@ -309,9 +309,9 @@ func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 		return nil, fmt.Errorf("frontend kind %q: %w", cfg.Kind, ErrFrontendKindNotRegistered)
 	}
 
-	driver, err := ctor(cfg.Name, cfg.Protocol, cfg.Listen, cfg.Options)
+	handler, err := ctor(cfg.Name, cfg.Protocol, cfg.Listen, cfg.Options)
 	if err != nil {
-		return nil, fmt.Errorf("driver for kind %q: %w", cfg.Kind, err)
+		return nil, fmt.Errorf("handler for kind %q: %w", cfg.Kind, err)
 	}
 
 	endpoint, exists := t.Endpoint(cfg.Endpoint.Name)
@@ -319,11 +319,11 @@ func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 		return nil, fmt.Errorf("endpoint %q does not exist in target %q", cfg.Endpoint.Name, cfg.Endpoint.Namespace)
 	}
 
-	f, err := frontend.New(e.ctx, t, endpoint, driver, cfg)
+	f, err := frontend.New(e.ctx, t, endpoint, handler, cfg)
 	if err != nil {
 		return nil, errors.Join(
 			err,
-			driver.Close(),
+			handler.Close(),
 		)
 	}
 

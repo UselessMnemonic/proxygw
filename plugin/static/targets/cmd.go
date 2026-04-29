@@ -12,7 +12,7 @@ import (
 
 const cmdStopTimeout = 5 * time.Second
 
-// CmdHandler is a target driver that runs a shell command while the target is
+// CmdHandler is a target handler that runs a shell command while the target is
 // warm.
 type CmdHandler struct {
 	command string

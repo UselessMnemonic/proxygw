@@ -1,6 +1,6 @@
 package method
 
-// CloseTargetRequest asks the plugin to destroy a target driver instance.
+// CloseTargetRequest asks the plugin to destroy a target handler instance.
 type CloseTargetRequest struct {
 	Name string `json:"name"`
 }

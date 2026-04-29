@@ -4,7 +4,7 @@ import (
 	"github.com/UselessMnemonic/proxygw/pkg/config"
 )
 
-// NewFrontendRequest asks the plugin to construct a frontend driver instance.
+// NewFrontendRequest asks the plugin to construct a frontend handler instance.
 type NewFrontendRequest struct {
 	Name     string          `json:"name"`
 	Kind     string          `json:"kind"`
@@ -17,7 +17,7 @@ func (NewFrontendRequest) Method() uint16 {
 	return MethodNewFrontendRequest
 }
 
-// NewFrontendResponse confirms the frontend driver was created.
+// NewFrontendResponse confirms the frontend handler was created.
 type NewFrontendResponse struct{}
 
 func (NewFrontendResponse) Method() uint16 {

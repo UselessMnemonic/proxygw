@@ -4,7 +4,7 @@ import (
 	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
 
-// NoneHandler is a no-op target driver useful for tests and static endpoints.
+// NoneHandler is a no-op target handler useful for tests and static endpoints.
 type NoneHandler struct{}
 
 // Warm accepts the lifecycle transition without doing work.

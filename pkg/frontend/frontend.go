@@ -33,7 +33,7 @@ type Frontend struct {
 	state  State
 }
 
-// New builds a frontend around a driver handler and reserves its dataplane
+// New builds a frontend around a handler handler and reserves its dataplane
 // mapping. The caller still needs to call Start before the listener accepts
 // traffic.
 func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, handler Handler, cfg config.Frontend) (*Frontend, error) {
@@ -252,8 +252,8 @@ func (f *Frontend) endBlocking() {
 	f.lock.Unlock()
 
 	err := errors.Join(
-		f.target.DNATGroup().DelMappings(f.mapping),
 		f.handler.Close(),
+		f.target.DNATGroup().DelMappings(f.mapping),
 	)
 
 	f.lock.Lock()

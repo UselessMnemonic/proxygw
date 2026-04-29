@@ -18,7 +18,7 @@ const (
 	alwaysClose
 )
 
-// AlwaysHandler is a frontend driver that periodically asks its target to warm
+// AlwaysHandler is a frontend handler that periodically asks its target to warm
 // while the frontend is running.
 type AlwaysHandler struct {
 	ch       chan struct{}

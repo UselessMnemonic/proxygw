@@ -1,6 +1,6 @@
 package method
 
-// CloseFrontendRequest asks the plugin to destroy a frontend driver instance.
+// CloseFrontendRequest asks the plugin to destroy a frontend handler instance.
 type CloseFrontendRequest struct {
 	Name string `json:"name"`
 }

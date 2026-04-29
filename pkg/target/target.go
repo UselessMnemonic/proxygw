@@ -33,7 +33,7 @@ type Target struct {
 	state  State
 }
 
-// New builds a target around a driver handler. The returned target starts
+// New builds a target around a handler handler. The returned target starts
 // inactive; call Warm before expecting it to serve traffic.
 func New(ctx context.Context, dnat *dataplane.DNATGroup, handler Handler, cfg config.Target) (*Target, error) {
 	if ctx == nil {
@@ -298,8 +298,8 @@ func (t *Target) endBlocking() {
 	t.lock.Unlock()
 
 	err := errors.Join(
-		t.dnat.Close(),
 		t.handler.Close(),
+		t.dnat.Close(),
 	)
 
 	t.lock.Lock()
