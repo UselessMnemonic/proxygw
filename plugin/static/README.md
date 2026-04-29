@@ -6,7 +6,7 @@
 
 Frontends:
 
-- `static:eager`: periodically warms its target while the frontend is running.
+- `static:always`: periodically warms its target while the frontend is running.
 - `static:http`: serves configured HTTP content and warms its target when requests arrive.
 
 Targets:
@@ -16,16 +16,16 @@ Targets:
 
 There is no plugin-level configuration for `static`. Its top-level plugin config is ignored; behavior is configured on each frontend or target where options are documented below.
 
-## static:eager Frontend
+## static:always Frontend
 
-`static:eager` emits a warm signal once per second while started. It does not bind its own network listener; the core engine still installs the configured DNAT mapping from `listen` to the selected target endpoint.
+`static:always` emits a warm signal once per second while started. It does not bind its own network listener; the core engine still installs the configured DNAT mapping from `listen` to the selected target endpoint.
 
 Example:
 
 ```yaml
 frontends:
   - name: public-http
-    kind: static:eager
+    kind: static:always
     protocol: tcp
     listen: 0.0.0.0:8088
     flow_timeout: 1m
@@ -135,7 +135,7 @@ targets:
 
 frontends:
   - name: public-http
-    kind: static:eager
+    kind: static:always
     protocol: tcp
     listen: 0.0.0.0:8088
     flow_timeout: 1m

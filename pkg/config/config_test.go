@@ -151,7 +151,7 @@ func validConfig() *Config {
 				Name: "public-http",
 				Kind: NamespaceReference{
 					Namespace: "static",
-					Name:      "eager",
+					Name:      "always",
 				},
 				Protocol:    ProtocolTCP,
 				Listen:      netip.MustParseAddrPort("0.0.0.0:80"),
