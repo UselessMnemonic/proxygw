@@ -75,12 +75,12 @@ func (h *CmdHandler) Drain() error {
 		} else {
 			h.logger.Info("command stopped", "command", h.command, "pid", cmd.Process.Pid)
 		}
-		return err
+		return nil
 	case <-time.After(cmdStopTimeout):
 		h.logger.Info("command stop timed out; killing process", "command", h.command, "pid", cmd.Process.Pid)
 		if err := cmd.Process.Kill(); err != nil {
 			h.logger.Error("command kill failed", "command", h.command, "pid", cmd.Process.Pid, "err", err)
-			return err
+			return nil
 		}
 		err := <-done
 		if err != nil {
@@ -88,7 +88,7 @@ func (h *CmdHandler) Drain() error {
 		} else {
 			h.logger.Info("command killed", "command", h.command, "pid", cmd.Process.Pid)
 		}
-		return err
+		return nil
 	}
 }
 

@@ -1,10 +1,8 @@
 package dataplane
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"net/netip"
 
 	"github.com/UselessMnemonic/proxygw/pkg/config"
@@ -99,7 +97,7 @@ func (d *Dataplane) ensureTableAdded() error {
 		return fmt.Errorf("define wildcard ipv6 dnat set: %w", err)
 	}
 
-	// define NAT chain
+	// DNAT chain for external traffic
 	d.prerouteNATChain = &nftables.Chain{
 		Table:    d.table,
 		Name:     "prerouting",
@@ -109,7 +107,17 @@ func (d *Dataplane) ensureTableAdded() error {
 	}
 	d.nft.AddChain(d.prerouteNATChain)
 
-	// define filter chain
+	// DNAT chain for internal traffic
+	d.outputNATChain = &nftables.Chain{
+		Table:    d.table,
+		Name:     "output",
+		Type:     nftables.ChainTypeNAT,
+		Hooknum:  nftables.ChainHookOutput,
+		Priority: nftables.ChainPriorityNATDest,
+	}
+	d.nft.AddChain(d.outputNATChain)
+
+	// define filter chain for timeouts
 	d.inputFilterChain = &nftables.Chain{
 		Table:    d.table,
 		Name:     "timeouts",
@@ -124,207 +132,8 @@ func (d *Dataplane) ensureTableAdded() error {
 		return fmt.Errorf("create table %q: %w", d.table.Name, err)
 	}
 
-	// define wildcard forwarding rules for ipv4
-	d.nft.AddRule(&nftables.Rule{
-		Table: d.table,
-		Chain: d.prerouteNATChain,
-		Exprs: []expr.Any{
-			// meta nfproto -> reg 1
-			&expr.Meta{
-				Key:      expr.MetaKeyNFPROTO,
-				Register: unix.NFT_REG_1,
-			},
-			// reg 1 == ipv4
-			&expr.Cmp{
-				Op:       expr.CmpOpEq,
-				Register: unix.NFT_REG_1,
-				Data:     []byte{unix.NFPROTO_IPV4},
-			},
-			// meta l4proto -> reg 1
-			&expr.Meta{
-				Key:      expr.MetaKeyL4PROTO,
-				Register: unix.NFT_REG_1,
-			},
-			// load th dport -> reg 2
-			&expr.Payload{
-				DestRegister: unix.NFT_REG_2,
-				Base:         expr.PayloadBaseTransportHeader,
-				Offset:       2,
-				Len:          2,
-			},
-			// lookup key (l4proto . th dport) in @dnatWildcard4, write value to reg 1+
-			&expr.Lookup{
-				SourceRegister: unix.NFT_REG_1,
-				SetID:          d.dnatWildcard4.ID,
-				DestRegister:   unix.NFT_REG_1,
-				IsDestRegSet:   true,
-				SetName:        d.dnatWildcard4.Name,
-			},
-			// dnat ip to <mapped addr> : <mapped port>
-			&expr.NAT{
-				Type:        expr.NATTypeDestNAT,
-				Family:      unix.NFPROTO_IPV4,
-				RegAddrMin:  unix.NFT_REG_1,
-				RegProtoMin: unix.NFT_REG_2,
-				Specified:   true,
-			},
-		},
-	})
-
-	// define wildcard forwarding rules for ipv6
-	d.nft.AddRule(&nftables.Rule{
-		Table: d.table,
-		Chain: d.prerouteNATChain,
-		Exprs: []expr.Any{
-			// meta nfproto -> reg 1
-			&expr.Meta{
-				Key:      expr.MetaKeyNFPROTO,
-				Register: unix.NFT_REG_1,
-			},
-			// reg 1 == ipv6
-			&expr.Cmp{
-				Op:       expr.CmpOpEq,
-				Register: unix.NFT_REG_1,
-				Data:     []byte{unix.NFPROTO_IPV6},
-			},
-			// meta l4proto -> reg 1
-			&expr.Meta{
-				Key:      expr.MetaKeyL4PROTO,
-				Register: unix.NFT_REG_1,
-			},
-			// load th dport -> reg 2
-			&expr.Payload{
-				DestRegister: unix.NFT_REG_2,
-				Base:         expr.PayloadBaseTransportHeader,
-				Offset:       2,
-				Len:          2,
-			},
-			// lookup key (l4proto . th dport) in @dnatWildcard6, write value to reg 1+
-			&expr.Lookup{
-				SourceRegister: unix.NFT_REG_1,
-				SetID:          d.dnatWildcard6.ID,
-				DestRegister:   unix.NFT_REG_1,
-				IsDestRegSet:   true,
-				SetName:        d.dnatWildcard6.Name,
-			},
-			// dnat ip6 to <mapped addr> : <mapped port>
-			&expr.NAT{
-				Type:        expr.NATTypeDestNAT,
-				Family:      unix.NFPROTO_IPV6,
-				RegAddrMin:  unix.NFT_REG_1,
-				RegProtoMin: unix.NFT_REG32_04,
-				Specified:   true,
-			},
-		},
-	})
-
-	// define specific forwarding rules for ipv4
-	d.nft.AddRule(&nftables.Rule{
-		Table: d.table,
-		Chain: d.prerouteNATChain,
-		Exprs: []expr.Any{
-			// meta nfproto -> reg 1
-			&expr.Meta{
-				Key:      expr.MetaKeyNFPROTO,
-				Register: unix.NFT_REG_1,
-			},
-			// reg 1 == ipv4
-			&expr.Cmp{
-				Op:       expr.CmpOpEq,
-				Register: unix.NFT_REG_1,
-				Data:     []byte{unix.NFPROTO_IPV4},
-			},
-			// meta l4proto -> reg 1
-			&expr.Meta{
-				Key:      expr.MetaKeyL4PROTO,
-				Register: unix.NFT_REG_1,
-			},
-			// load ip daddr -> reg 2
-			&expr.Payload{
-				DestRegister: unix.NFT_REG_2,
-				Base:         expr.PayloadBaseNetworkHeader,
-				Offset:       16,
-				Len:          4,
-			},
-			// load th dport -> reg 3
-			&expr.Payload{
-				DestRegister: unix.NFT_REG_3,
-				Base:         expr.PayloadBaseTransportHeader,
-				Offset:       2,
-				Len:          2,
-			},
-			// lookup key (l4proto . ip daddr . th dport) in @dnatSpecific4, write value to reg 1+
-			&expr.Lookup{
-				SourceRegister: unix.NFT_REG_1,
-				SetID:          d.dnatSpecific4.ID,
-				DestRegister:   unix.NFT_REG_1,
-				IsDestRegSet:   true,
-				SetName:        d.dnatSpecific4.Name,
-			},
-			// dnat ip to <mapped addr> : <mapped port>
-			&expr.NAT{
-				Type:        expr.NATTypeDestNAT,
-				Family:      unix.NFPROTO_IPV4,
-				RegAddrMin:  unix.NFT_REG_1,
-				RegProtoMin: unix.NFT_REG_2,
-				Specified:   true,
-			},
-		},
-	})
-
-	// define forwarding rules for ipv6
-	d.nft.AddRule(&nftables.Rule{
-		Table: d.table,
-		Chain: d.prerouteNATChain,
-		Exprs: []expr.Any{
-			// meta nfproto -> reg 1
-			&expr.Meta{
-				Key:      expr.MetaKeyNFPROTO,
-				Register: unix.NFT_REG32_00,
-			},
-			// reg 1 == ipv6
-			&expr.Cmp{
-				Op:       expr.CmpOpEq,
-				Register: unix.NFT_REG32_00,
-				Data:     []byte{unix.NFPROTO_IPV6},
-			},
-			// meta l4proto -> reg 1
-			&expr.Meta{
-				Key:      expr.MetaKeyL4PROTO,
-				Register: unix.NFT_REG32_00,
-			},
-			// load ip6 daddr -> reg 2
-			&expr.Payload{
-				DestRegister: unix.NFT_REG32_01,
-				Base:         expr.PayloadBaseNetworkHeader,
-				Offset:       24,
-				Len:          16,
-			},
-			// load th dport -> reg 6
-			&expr.Payload{
-				DestRegister: unix.NFT_REG32_05,
-				Base:         expr.PayloadBaseTransportHeader,
-				Offset:       2,
-				Len:          2,
-			},
-			// lookup key (l4proto . ip6 daddr . th dport) in @dnatSpecific6, write value to reg 1+
-			&expr.Lookup{
-				SourceRegister: unix.NFT_REG32_00,
-				SetID:          d.dnatSpecific6.ID,
-				DestRegister:   unix.NFT_REG_1,
-				IsDestRegSet:   true,
-				SetName:        d.dnatSpecific6.Name,
-			},
-			// dnat ip6 to <mapped addr> : <mapped port>
-			&expr.NAT{
-				Type:        expr.NATTypeDestNAT,
-				Family:      unix.NFPROTO_IPV6,
-				RegAddrMin:  unix.NFT_REG_1,
-				RegProtoMin: unix.NFT_REG32_04,
-				Specified:   true,
-			},
-		},
-	})
+	d.addDNATRules(d.prerouteNATChain)
+	d.addDNATRules(d.outputNATChain)
 
 	// submit changes for base rules
 	if err = d.nft.Flush(); err != nil {
@@ -369,8 +178,7 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 	l4Protocol := uint8(proto)
 
 	// create new TTL
-	info := flowInfo{}
-	info.timeoutObj = &nftables.NamedObj{
+	timeoutObj := &nftables.NamedObj{
 		Table: dg.dplane.table,
 		Name:  encodeTimeoutObjName(proto, addr),
 		Type:  nftables.ObjTypeCtTimeout,
@@ -383,228 +191,15 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 			},
 		},
 	}
-	dg.dplane.nft.AddObj(info.timeoutObj)
+	dg.dplane.nft.AddObj(timeoutObj)
 
-	info.timeoutRule = &nftables.Rule{
-		Table: dg.dplane.table,
-		Chain: dg.dplane.inputFilterChain,
-	}
-
-	// create rule for ipv6
-	if addr.Addr().Is6() {
-		if !addr.Addr().IsUnspecified() {
-			info.timeoutRule.Exprs = []expr.Any{
-				// meta l4proto -> reg 1
-				&expr.Meta{
-					Key:      expr.MetaKeyL4PROTO,
-					Register: unix.NFT_REG_1,
-				},
-				// reg 1 == configured protocol (tcp/udp)
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_1,
-					Data:     []byte{l4Protocol},
-				},
-				// meta nfproto -> reg 1
-				&expr.Meta{
-					Key:      expr.MetaKeyNFPROTO,
-					Register: unix.NFT_REG_1,
-				},
-				// reg 1 == ipv6 for this frontend
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_1,
-					Data:     []byte{unix.NFPROTO_IPV6, 0},
-				},
-				// load ip6 daddr -> reg 2
-				&expr.Payload{
-					DestRegister: unix.NFT_REG_2,
-					Base:         expr.PayloadBaseNetworkHeader,
-					Offset:       24,
-					Len:          16,
-				},
-				// reg 2 == frontend listen IPv6 address
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_2,
-					Data:     addr.Addr().AsSlice(),
-				},
-				// load th dport -> reg 6
-				&expr.Payload{
-					DestRegister: unix.NFT_REG_3,
-					Base:         expr.PayloadBaseTransportHeader,
-					Offset:       2,
-					Len:          2,
-				},
-				// reg 6 == frontend listen port
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_3,
-					Data:     encodePort(addr.Port()),
-				},
-				// apply ct timeout policy object by name
-				&expr.Objref{
-					Type: int(nftables.ObjTypeCtTimeout),
-					Name: info.timeoutObj.Name,
-				},
-			}
-		}
-		if addr.Addr().IsUnspecified() {
-			info.timeoutRule.Exprs = []expr.Any{
-				// meta l4proto -> reg 1
-				&expr.Meta{
-					Key:      expr.MetaKeyL4PROTO,
-					Register: unix.NFT_REG_1,
-				},
-				// reg 1 == configured protocol (tcp/udp)
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_1,
-					Data:     []byte{l4Protocol},
-				},
-				// meta nfproto -> reg 1
-				&expr.Meta{
-					Key:      expr.MetaKeyNFPROTO,
-					Register: unix.NFT_REG_1,
-				},
-				// reg 1 == ipv6 for this frontend
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_1,
-					Data:     []byte{unix.NFPROTO_IPV6, 0},
-				},
-				// load th dport -> reg 2
-				&expr.Payload{
-					DestRegister: unix.NFT_REG_2,
-					Base:         expr.PayloadBaseTransportHeader,
-					Offset:       2,
-					Len:          2,
-				},
-				// reg 2 == frontend listen port
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_2,
-					Data:     encodePort(addr.Port()),
-				},
-				// apply ct timeout policy object by name
-				&expr.Objref{
-					Type: int(nftables.ObjTypeCtTimeout),
-					Name: info.timeoutObj.Name,
-				},
-			}
-		}
-	}
-
-	// create rules for ipv4
-	if addr.Addr().Is4() {
-		if !addr.Addr().IsUnspecified() {
-			info.timeoutRule.Exprs = []expr.Any{
-				// meta l4proto -> reg 1
-				&expr.Meta{
-					Key:      expr.MetaKeyL4PROTO,
-					Register: unix.NFT_REG_1,
-				},
-				// reg 1 == configured protocol (tcp/udp)
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_1,
-					Data:     []byte{l4Protocol},
-				},
-				// meta nfproto -> reg 1
-				&expr.Meta{
-					Key:      expr.MetaKeyNFPROTO,
-					Register: unix.NFT_REG_1,
-				},
-				// reg 1 == ipv4 or ipv6 family for this frontend
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_1,
-					Data:     []byte{unix.NFPROTO_IPV4, 0},
-				},
-				// load ip daddr -> reg 2
-				&expr.Payload{
-					DestRegister: unix.NFT_REG_2,
-					Base:         expr.PayloadBaseNetworkHeader,
-					Offset:       16,
-					Len:          4,
-				},
-				// reg 2 == frontend listen IPv4 address
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_2,
-					Data:     addr.Addr().AsSlice(),
-				},
-				// load th dport -> reg 3
-				&expr.Payload{
-					DestRegister: unix.NFT_REG_3,
-					Base:         expr.PayloadBaseTransportHeader,
-					Offset:       2,
-					Len:          2,
-				},
-				// reg 3 == frontend listen port
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_3,
-					Data:     encodePort(addr.Port()),
-				},
-				// apply ct timeout policy object by name
-				&expr.Objref{
-					Type: int(nftables.ObjTypeCtTimeout),
-					Name: info.timeoutObj.Name,
-				},
-			}
-		}
-		if addr.Addr().IsUnspecified() {
-			info.timeoutRule.Exprs = []expr.Any{
-				// meta l4proto -> reg 1
-				&expr.Meta{
-					Key:      expr.MetaKeyL4PROTO,
-					Register: unix.NFT_REG_1,
-				},
-				// reg 1 == configured protocol (tcp/udp)
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_1,
-					Data:     []byte{l4Protocol},
-				},
-				// meta nfproto -> reg 1
-				&expr.Meta{
-					Key:      expr.MetaKeyNFPROTO,
-					Register: unix.NFT_REG_1,
-				},
-				// reg 1 == ipv4 for this frontend
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_1,
-					Data:     []byte{unix.NFPROTO_IPV4, 0},
-				},
-				// load th dport -> reg 2
-				&expr.Payload{
-					DestRegister: unix.NFT_REG_2,
-					Base:         expr.PayloadBaseTransportHeader,
-					Offset:       2,
-					Len:          2,
-				},
-				// reg 2 == frontend listen port
-				&expr.Cmp{
-					Op:       expr.CmpOpEq,
-					Register: unix.NFT_REG_2,
-					Data:     encodePort(addr.Port()),
-				},
-				// apply ct timeout policy object by name
-				&expr.Objref{
-					Type: int(nftables.ObjTypeCtTimeout),
-					Name: info.timeoutObj.Name,
-				},
-			}
-		}
-	}
-	dg.dplane.nft.AddRule(info.timeoutRule)
+	timeoutRule := dg.dplane.defineTimeoutRule(l4Protocol, addr, timeoutObj)
+	dg.dplane.nft.AddRule(timeoutRule)
 
 	if err := dg.dplane.nft.Flush(); err != nil {
 		return fmt.Errorf("create ttl rules: %w", err)
 	}
-	dg.flowInfoBySrc[dnatKey{addr, proto}] = info
+	dg.flowInfoBySrc[dnatKey{addr, proto}] = flowInfo{timeoutObj, timeoutRule}
 	return nil
 }
 
@@ -686,62 +281,4 @@ func (dg *DNATGroup) ensureDNATDeleted(mappings []DNATMapping) error {
 		return fmt.Errorf("remove elements: %w", err)
 	}
 	return nil
-}
-
-func compileSetElement(mapping DNATMapping) nftables.SetElement {
-	key := encodeSpecificKey(mapping.Protocol, mapping.Source)
-	if mapping.Source.Addr().IsUnspecified() {
-		key = encodeWildcardKey(mapping.Protocol, mapping.Source.Port())
-	}
-
-	return nftables.SetElement{
-		Key: key,
-		Val: encodeMapValue(mapping.Destination),
-	}
-}
-
-func encodeTimeoutObjName(protocol config.Protocol, address netip.AddrPort) string {
-	hasher := fnv.New64a()
-	_, _ = hasher.Write([]byte{byte(protocol)})
-	_, _ = hasher.Write(address.Addr().AsSlice())
-	_, _ = hasher.Write(encodePort(address.Port()))
-	return fmt.Sprintf("ct_%016x", hasher.Sum64())
-}
-
-func encodeSpecificKey(protocol config.Protocol, address netip.AddrPort) []byte {
-	addr := address.Addr().AsSlice()
-	buf := make([]byte, 0, 4+len(addr)+4)
-	buf = appendConcatField(buf, []byte{uint8(protocol)})
-	buf = appendConcatField(buf, addr)
-	buf = appendConcatField(buf, encodePort(address.Port()))
-	return buf
-}
-
-func encodeWildcardKey(protocol config.Protocol, port uint16) []byte {
-	buf := make([]byte, 0, 8)
-	buf = appendConcatField(buf, []byte{uint8(protocol)})
-	buf = appendConcatField(buf, encodePort(port))
-	return buf
-}
-
-func encodeMapValue(address netip.AddrPort) []byte {
-	addr := address.Addr().AsSlice()
-	buf := make([]byte, 0, len(addr)+4)
-	buf = appendConcatField(buf, addr)
-	buf = appendConcatField(buf, encodePort(address.Port()))
-	return buf
-}
-
-func encodePort(port uint16) []byte {
-	buf := make([]byte, 2)
-	binary.BigEndian.PutUint16(buf, port)
-	return buf
-}
-
-func appendConcatField(dst []byte, field []byte) []byte {
-	dst = append(dst, field...)
-	if rem := len(field) % 4; rem != 0 {
-		dst = append(dst, make([]byte, 4-rem)...)
-	}
-	return dst
 }

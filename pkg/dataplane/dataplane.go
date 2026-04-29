@@ -24,6 +24,7 @@ type Dataplane struct {
 	dnatWildcard4    *nftables.Set
 	dnatWildcard6    *nftables.Set
 	prerouteNATChain *nftables.Chain
+	outputNATChain   *nftables.Chain
 	inputFilterChain *nftables.Chain
 
 	wg     sync.WaitGroup
