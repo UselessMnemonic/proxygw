@@ -137,8 +137,16 @@ func (f *Frontend) Wait() {
 	f.wg.Wait()
 }
 
-// Close requests permanent shutdown of the frontend.
+// Close requests permanent shutdown of the frontend. It does not wait for the
+// handler to finish closing; call Wait to observe shutdown completion.
 func (f *Frontend) Close() {
+	f.lock.Lock()
+	if f.state == Closed {
+		f.lock.Unlock()
+		return
+	}
+	f.state = Closed
+	f.lock.Unlock()
 	f.cancel()
 }
 
@@ -150,7 +158,7 @@ func (f *Frontend) Start() bool {
 	switch f.state {
 	case Running, Starting:
 		return true
-	case Stopping:
+	case Stopping, Closed:
 		return false
 	case Stopped:
 		f.err = nil
@@ -170,7 +178,7 @@ func (f *Frontend) Stop() bool {
 	switch f.state {
 	case Stopped, Stopping:
 		return true
-	case Starting:
+	case Starting, Closed:
 		return false
 	case Running:
 		f.err = nil
@@ -182,16 +190,26 @@ func (f *Frontend) Stop() bool {
 	}
 }
 
-func (f *Frontend) tryStart() {
+func (f *Frontend) startBlocking() {
+	f.lock.RLock()
+	if f.state == Closed {
+		f.lock.RUnlock()
+		return
+	}
+	f.lock.RUnlock()
+
 	f.logger.Info("start started", "listen", f.Listen())
 	err := f.handler.Start()
 
 	f.lock.Lock()
 	defer f.lock.Unlock()
+	if f.state == Closed {
+		return
+	}
 	f.err = err
 	if f.err != nil {
 		f.state = Stopping
-		f.logger.Error("start failed", "err", f.err)
+		f.logger.Error("start completed", "err", f.err)
 		return
 	}
 
@@ -200,16 +218,26 @@ func (f *Frontend) tryStart() {
 	f.logger.Info("start completed", "listen", f.Listen())
 }
 
-func (f *Frontend) tryStop() {
+func (f *Frontend) stopBlocking() {
+	f.lock.RLock()
+	if f.state == Closed {
+		f.lock.RUnlock()
+		return
+	}
+	f.lock.RUnlock()
+
 	f.logger.Info("stop started", "listen", f.Listen())
 	err := f.handler.Stop()
 
 	f.lock.Lock()
 	defer f.lock.Unlock()
+	if f.state == Closed {
+		return
+	}
 	f.err = err
 	if f.err != nil {
 		f.state = Starting
-		f.logger.Error("stop failed", "err", f.err)
+		f.logger.Error("stop completed", "err", f.err)
 		return
 	}
 
@@ -218,16 +246,21 @@ func (f *Frontend) tryStop() {
 	f.logger.Info("stop completed", "listen", f.Listen())
 }
 
-func (f *Frontend) end() {
+func (f *Frontend) endBlocking() {
 	f.lock.Lock()
-	defer f.lock.Unlock()
 	f.state = Closed
-	f.err = errors.Join(
+	f.lock.Unlock()
+
+	err := errors.Join(
 		f.target.DNATGroup().DelMappings(f.mapping),
 		f.handler.Close(),
 	)
+
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	f.err = err
 	if f.err != nil {
-		f.logger.Error("close failed", "err", f.err)
+		f.logger.Error("close completed", "err", f.err)
 		return
 	}
 	f.logger.Info("close completed")
@@ -237,7 +270,7 @@ func (f *Frontend) start() {
 	f.wg.Go(func() {
 		f.logger.Info("event loop started")
 		defer func() {
-			f.end()
+			f.endBlocking()
 			if err := f.Error(); err != nil {
 				f.logger.Error("event loop stopped", "state", f.State().String(), "err", err)
 				return
@@ -255,10 +288,10 @@ func (f *Frontend) start() {
 				switch next {
 				case Starting:
 					f.logger.Info("start requested")
-					f.tryStart()
+					f.startBlocking()
 				case Stopping:
 					f.logger.Info("stop requested")
-					f.tryStop()
+					f.stopBlocking()
 				default:
 					continue
 				}
