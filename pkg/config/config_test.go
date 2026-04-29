@@ -102,7 +102,6 @@ func TestConfigValidateRejectsInvalidConfig(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -151,7 +150,7 @@ func validConfig() *Config {
 				Name: "public-http",
 				Kind: NamespaceReference{
 					Namespace: "static",
-					Name:      "eager",
+					Name:      "always",
 				},
 				Protocol:    ProtocolTCP,
 				Listen:      netip.MustParseAddrPort("0.0.0.0:80"),

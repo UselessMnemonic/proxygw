@@ -201,8 +201,16 @@ func (t *Target) Drain() bool {
 	}
 }
 
-// Close requests permanent shutdown of the target.
+// Close requests permanent shutdown of the target. It does not wait for the
+// handler to finish closing; call Wait to observe shutdown completion.
 func (t *Target) Close() {
+	t.lock.Lock()
+	if t.state == Closed {
+		t.lock.Unlock()
+		return
+	}
+	t.state = Closed
+	t.lock.Unlock()
 	t.cancel()
 }
 
@@ -212,12 +220,22 @@ func (t *Target) Wait() {
 	t.wg.Wait()
 }
 
-func (t *Target) tryWarm() {
+func (t *Target) warmBlocking() {
+	t.lock.RLock()
+	if t.state == Closed {
+		t.lock.RUnlock()
+		return
+	}
+	t.lock.RUnlock()
+
 	t.logger.Info("warm started")
 	err := t.handler.Warm()
 
 	t.lock.Lock()
 	defer t.lock.Unlock()
+	if t.state == Closed {
+		return
+	}
 	t.err = err
 	if t.err != nil {
 		t.state = Inactive
@@ -232,18 +250,28 @@ func (t *Target) tryWarm() {
 	err = t.dnat.Enable()
 	if err != nil {
 		t.err = fmt.Errorf("failed to enable DNAT: %w", err)
-		t.logger.Error("warm failed", "err", t.err)
+		t.logger.Error("warm completed", "err", t.err)
 		return
 	}
 	t.logger.Info("warm completed")
 }
 
-func (t *Target) tryDrain() {
+func (t *Target) drainBlocking() {
+	t.lock.RLock()
+	if t.state == Closed {
+		t.lock.RUnlock()
+		return
+	}
+	t.lock.RUnlock()
+
 	t.logger.Info("drain started")
 	err := t.handler.Drain()
 
 	t.lock.Lock()
 	defer t.lock.Unlock()
+	if t.state == Closed {
+		return
+	}
 	t.err = err
 	if t.err != nil {
 		t.state = Active
@@ -258,22 +286,27 @@ func (t *Target) tryDrain() {
 	err = t.dnat.Disable()
 	if err != nil {
 		t.err = fmt.Errorf("failed to disable DNAT: %w", err)
-		t.logger.Error("drain failed", "err", t.err)
+		t.logger.Error("drain completed", "err", t.err)
 		return
 	}
 	t.logger.Info("drain completed")
 }
 
-func (t *Target) end() {
+func (t *Target) endBlocking() {
 	t.lock.Lock()
-	defer t.lock.Unlock()
 	t.state = Closed
-	t.err = errors.Join(
+	t.lock.Unlock()
+
+	err := errors.Join(
 		t.dnat.Close(),
 		t.handler.Close(),
 	)
+
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	t.err = err
 	if t.err != nil {
-		t.logger.Error("close failed", "err", t.err)
+		t.logger.Error("close completed", "err", t.err)
 		return
 	}
 	t.logger.Info("close completed")
@@ -283,7 +316,7 @@ func (t *Target) start() {
 	t.wg.Go(func() {
 		t.logger.Info("event loop started")
 		defer func() {
-			t.end()
+			t.endBlocking()
 			if err := t.Error(); err != nil {
 				t.logger.Error("event loop stopped", "state", t.State().String(), "err", err)
 				return
@@ -298,10 +331,10 @@ func (t *Target) start() {
 				switch next {
 				case Warming:
 					t.logger.Info("warm requested")
-					t.tryWarm()
+					t.warmBlocking()
 				case Draining:
 					t.logger.Info("drain requested")
-					t.tryDrain()
+					t.drainBlocking()
 				default:
 					continue
 				}

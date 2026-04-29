@@ -8,59 +8,59 @@ import (
 	"github.com/UselessMnemonic/proxygw/pkg/frontend"
 )
 
-const eagerWarmInterval = time.Second
+const alwaysWarmInterval = time.Second
 
-type eagerCommand uint8
+type alwaysCommand uint8
 
 const (
-	eagerStart eagerCommand = iota
-	eagerStop
-	eagerClose
+	alwaysStart alwaysCommand = iota
+	alwaysStop
+	alwaysClose
 )
 
-// EagerHandler is a frontend driver that periodically asks its target to warm
+// AlwaysHandler is a frontend driver that periodically asks its target to warm
 // while the frontend is running.
-type EagerHandler struct {
+type AlwaysHandler struct {
 	ch       chan struct{}
-	commands chan eagerCommand
+	commands chan alwaysCommand
 	closed   bool
 }
 
 // Start begins emitting warm signals.
-func (h *EagerHandler) Start() error {
+func (h *AlwaysHandler) Start() error {
 	if h.closed {
 		return nil
 	}
-	h.commands <- eagerStart
+	h.commands <- alwaysStart
 	return nil
 }
 
 // Stop pauses warm signals.
-func (h *EagerHandler) Stop() error {
+func (h *AlwaysHandler) Stop() error {
 	if h.closed {
 		return nil
 	}
-	h.commands <- eagerStop
+	h.commands <- alwaysStop
 	return nil
 }
 
 // Close permanently stops the warm loop.
-func (h *EagerHandler) Close() error {
+func (h *AlwaysHandler) Close() error {
 	if h.closed {
 		return nil
 	}
 	h.closed = true
-	h.commands <- eagerClose
+	h.commands <- alwaysClose
 	return nil
 }
 
 // ShouldWarm returns warm signals for the attached target.
-func (h *EagerHandler) ShouldWarm() <-chan struct{} {
+func (h *AlwaysHandler) ShouldWarm() <-chan struct{} {
 	return h.ch
 }
 
-func (h *EagerHandler) loop() {
-	ticker := time.NewTicker(eagerWarmInterval)
+func (h *AlwaysHandler) loop() {
+	ticker := time.NewTicker(alwaysWarmInterval)
 	ticker.Stop()
 	defer ticker.Stop()
 
@@ -76,28 +76,28 @@ func (h *EagerHandler) loop() {
 			}
 		case cmd := <-h.commands:
 			switch cmd {
-			case eagerStart:
+			case alwaysStart:
 				if !running {
-					ticker.Reset(eagerWarmInterval)
+					ticker.Reset(alwaysWarmInterval)
 					running = true
 				}
-			case eagerStop:
+			case alwaysStop:
 				if running {
 					ticker.Stop()
 					running = false
 				}
-			case eagerClose:
+			case alwaysClose:
 				return
 			}
 		}
 	}
 }
 
-// NewEagerHandler creates an eager frontend handler.
-func NewEagerHandler(_ string, _ config.Protocol, _ netip.AddrPort, _ map[string]any) (frontend.Handler, error) {
-	h := &EagerHandler{
+// NewAlwaysHandler creates an always frontend handler.
+func NewAlwaysHandler(_ string, _ config.Protocol, _ netip.AddrPort, _ map[string]any) (frontend.Handler, error) {
+	h := &AlwaysHandler{
 		ch:       make(chan struct{}, 1),
-		commands: make(chan eagerCommand),
+		commands: make(chan alwaysCommand),
 	}
 	go h.loop()
 	return h, nil

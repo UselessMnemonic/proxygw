@@ -60,7 +60,7 @@ Example shape:
   "frontends": [
     {
       "name": "public-http",
-      "kind": "static:eager",
+      "kind": "static:always",
       "state": "running",
       "protocol": "tcp",
       "listen": "0.0.0.0:8088",

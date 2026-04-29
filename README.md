@@ -10,7 +10,7 @@ The repository builds two binaries:
 ## Current Capabilities
 
 - YAML runtime configuration with schema files in `configs/`.
-- Namespaced plugin kinds, such as `static:eager`, `static:http`, `static:cmd`, and `static:none`.
+- Namespaced plugin kinds, such as `static:always`, `static:http`, `static:cmd`, and `static:none`.
 - Built-in control plugin (`ctl`) exposing a Unix-socket IPC endpoint.
 - Built-in static plugin (`static`) for simple warm triggers and local command targets.
 - nftables-based IPv4 and IPv6 DNAT mappings.
@@ -100,7 +100,7 @@ targets:
 
 frontends:
   - name: public-http
-    kind: static:eager
+    kind: static:always
     protocol: tcp
     listen: 0.0.0.0:8088
     flow_timeout: 1m
