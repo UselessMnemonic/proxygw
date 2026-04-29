@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/proxygw-logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/proxygw-logo.svg">
+    <img alt="Proxy Gateway logo" src="assets/proxygw-logo.svg" width="260">
+  </picture>
+</p>
+
 # Proxy Gateway
 
 Proxy Gateway is a Linux gateway daemon that warms backend targets on demand and routes frontend traffic to those targets with nftables DNAT rules. It is built around a small plugin system: plugins register frontend kinds, target kinds, and optional lifecycle hooks, while the core engine manages state transitions, dataplane mappings, and shutdown.
