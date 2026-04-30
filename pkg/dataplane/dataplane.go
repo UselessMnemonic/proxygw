@@ -13,6 +13,8 @@ type Dataplane interface {
 	// A Group is considered stale when there is no traffic known to
 	// the dataplane to any Mapping.Destination. Returns ErrClosed.
 	StaleGroups() ([]Group, error)
+	// TODO: add a paramter 'since' and internal last-seen tracking
+
 	// Close invalidates all groups and closes all held resources.
 	// When closed, all operations fail with ErrClosed.
 	Close() error
