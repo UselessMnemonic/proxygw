@@ -24,8 +24,8 @@ type Connft struct {
 	dnatWildcard4    *nftables.Set
 	dnatWildcard6    *nftables.Set
 	prerouteNATChain *nftables.Chain
-	outputNATChain   *nftables.Chain
 	inputFilterChain *nftables.Chain
+	// TODO: support DNAT in output chain
 
 	lock   sync.RWMutex
 	closed bool

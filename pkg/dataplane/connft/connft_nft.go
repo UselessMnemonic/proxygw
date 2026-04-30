@@ -108,16 +108,6 @@ func (d *Connft) ensureTableAdded() error {
 	}
 	d.nft.AddChain(d.prerouteNATChain)
 
-	// DNAT chain for internal traffic
-	d.outputNATChain = &nftables.Chain{
-		Table:    d.table,
-		Name:     "output",
-		Type:     nftables.ChainTypeNAT,
-		Hooknum:  nftables.ChainHookOutput,
-		Priority: nftables.ChainPriorityNATDest,
-	}
-	d.nft.AddChain(d.outputNATChain)
-
 	// define filter chain for timeouts
 	d.inputFilterChain = &nftables.Chain{
 		Table:    d.table,
@@ -134,7 +124,6 @@ func (d *Connft) ensureTableAdded() error {
 	}
 
 	d.addDNATRules(d.prerouteNATChain)
-	d.addDNATRules(d.outputNATChain)
 
 	// submit changes for base rules
 	if err = d.nft.Flush(); err != nil {
@@ -162,6 +151,12 @@ func (dg *ConnftGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPo
 		ttlObj := info.timeoutObj.Obj.(*expr.CtTimeout)
 		ttlObj.Policy[expr.CtStateUDPUNREPLIED] = ttl.Seconds()
 		ttlObj.Policy[expr.CtStateUDPREPLIED] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPESTABLISHED] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPFINWAIT] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPTIMEWAIT] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPCLOSEWAIT] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPLASTACK] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPCLOSE] = ttl.Seconds()
 		dg.dplane.nft.AddObj(info.timeoutObj)
 		if err := dg.dplane.nft.Flush(); err != nil {
 			return fmt.Errorf("update flow timeout object: %w", err)
@@ -187,8 +182,14 @@ func (dg *ConnftGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPo
 			L3Proto: l3Protocol,
 			L4Proto: l4Protocol,
 			Policy: expr.CtStatePolicyTimeout{
-				expr.CtStateUDPUNREPLIED: ttl.Seconds(),
-				expr.CtStateUDPREPLIED:   ttl.Seconds(),
+				expr.CtStateUDPUNREPLIED:   ttl.Seconds(),
+				expr.CtStateUDPREPLIED:     ttl.Seconds(),
+				expr.CtStateTCPESTABLISHED: ttl.Seconds(),
+				expr.CtStateTCPFINWAIT:     ttl.Seconds(),
+				expr.CtStateTCPTIMEWAIT:    ttl.Seconds(),
+				expr.CtStateTCPCLOSEWAIT:   ttl.Seconds(),
+				expr.CtStateTCPLASTACK:     ttl.Seconds(),
+				expr.CtStateTCPCLOSE:       ttl.Seconds(),
 			},
 		},
 	}
