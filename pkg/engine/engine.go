@@ -8,6 +8,7 @@ import (
 	"maps"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/UselessMnemonic/proxygw/pkg/config"
 	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
@@ -15,15 +16,18 @@ import (
 	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
 
+const GroupPollPeriod = 60 * time.Second
+
 // Engine is the top-level runtime object for embedding or supervising a proxy
 // gateway. Register handler kinds first, then create targets, then create and
 // start frontends that point at those targets.
 type Engine struct {
-	dplane        *dataplane.Dataplane
+	dplane        dataplane.Dataplane
 	frontends     map[string]*frontend.Frontend
 	frontendCtors map[string]frontend.HandlerCtor
 	targets       map[string]*target.Target
 	targetCtors   map[string]target.HandlerCtor
+	lastSeen      map[string]time.Time
 	logger        *slog.Logger
 
 	wg     sync.WaitGroup
@@ -33,25 +37,22 @@ type Engine struct {
 	closed bool
 }
 
-// New prepares a gateway engine with the given name. Keep this name stable
-// across restarts for the same gateway instance because it is used for
-// dataplane resources.
-func New(ctx context.Context, name string) (*Engine, error) {
-	ctx, cancel := context.WithCancel(ctx)
-	logger := slog.Default().With("component", "engine", "name", name)
-
-	plane, err := dataplane.New(ctx, name)
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("creating dataplane: %w", err)
+// New prepares a gateway engine using the supplied dataplane.
+func New(ctx context.Context, dplane dataplane.Dataplane) (*Engine, error) {
+	if dplane == nil {
+		return nil, errors.New("dataplane is nil")
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	logger := slog.Default().With("component", "engine", "dataplane", dplane.Name())
+
 	e := &Engine{
-		dplane:        plane,
+		dplane:        dplane,
 		frontends:     make(map[string]*frontend.Frontend),
 		frontendCtors: make(map[string]frontend.HandlerCtor),
 		targets:       make(map[string]*target.Target),
 		targetCtors:   make(map[string]target.HandlerCtor),
+		lastSeen:      make(map[string]time.Time),
 		logger:        logger,
 
 		lock:   sync.RWMutex{},
@@ -80,7 +81,6 @@ func (e *Engine) Close() {
 // Wait blocks until shutdown has been requested and all resource goroutines
 // known to the engine have exited.
 func (e *Engine) Wait() {
-	<-e.ctx.Done()
 	e.wg.Wait()
 }
 
@@ -94,7 +94,7 @@ func (e *Engine) Closed() bool {
 
 // AddFrontendKind makes a frontend implementation available to configuration
 // and API calls. Names are conventionally namespace-qualified, such as
-// "static:http".
+// "static:http". Returns ErrClosed or ErrFrontendKindAlreadyRegistered.
 func (e *Engine) AddFrontendKind(name string, kind frontend.HandlerCtor) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -127,7 +127,7 @@ func (e *Engine) FrontendKinds() []frontend.HandlerCtor {
 }
 
 // DelFrontendKind unregisters a frontend implementation so new frontends can no
-// longer use it.
+// longer use it. Returns ErrClosed or ErrFrontendKindNotRegistered.
 func (e *Engine) DelFrontendKind(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -150,6 +150,7 @@ func (e *Engine) DelFrontendKind(name string) error {
 
 // AddTargetKind makes a target implementation available to configuration and
 // API calls. Names are conventionally namespace-qualified, such as "static:cmd".
+// Returns ErrClosed or ErrTargetKindAlreadyRegistered.
 func (e *Engine) AddTargetKind(name string, kind target.HandlerCtor) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -182,7 +183,7 @@ func (e *Engine) TargetKinds() []target.HandlerCtor {
 }
 
 // DelTargetKind unregisters a target implementation so new targets can no
-// longer use it.
+// longer use it. Returns ErrClosed or ErrTargetKindNotRegistered.
 func (e *Engine) DelTargetKind(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -205,6 +206,8 @@ func (e *Engine) DelTargetKind(name string) error {
 
 // NewTarget creates a target from the given configuration. Target names must be
 // unique for the lifetime of the engine unless a closed target is deleted first.
+// Returns ErrClosed, ErrTargetAlreadyRegistered, or
+// ErrTargetKindNotRegistered.
 func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -219,7 +222,7 @@ func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 
 	factory := e.targetCtors[cfg.Kind.String()]
 	if factory == nil {
-		return nil, fmt.Errorf("lookup kind %q: %w", cfg.Kind, ErrTargetKindNotRegistered)
+		return nil, ErrTargetKindNotRegistered
 	}
 
 	handler, err := factory(cfg.Name, cfg.Options)
@@ -227,7 +230,7 @@ func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 		return nil, fmt.Errorf("handler for kind %q: %w", cfg.Kind, err)
 	}
 
-	dnat, err := e.dplane.NewDNATGroup(cfg.Name, cfg.IdleTimeout)
+	dnat, err := e.dplane.NewGroup(cfg.Name)
 	if err != nil {
 		return nil, fmt.Errorf("flow group: %w", err)
 	}
@@ -242,6 +245,7 @@ func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 	}
 
 	e.targets[t.Name()] = t
+	e.lastSeen[t.Name()] = time.Now()
 	e.joinTarget(t)
 	return t, nil
 }
@@ -262,7 +266,7 @@ func (e *Engine) Targets() []*target.Target {
 }
 
 // DelTarget forgets a closed target. Live targets must be closed by their owner
-// before deletion.
+// before deletion. Returns ErrClosed or ErrTargetInUse.
 func (e *Engine) DelTarget(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -278,11 +282,14 @@ func (e *Engine) DelTarget(name string) error {
 		return ErrTargetInUse
 	}
 	delete(e.targets, name)
+	delete(e.lastSeen, name)
 	return nil
 }
 
 // NewFrontend creates a frontend from the given configuration. The referenced
-// target and endpoint must already exist.
+// target and endpoint must already exist. Returns ErrClosed,
+// ErrFrontendAlreadyRegistered, ErrTargetNotRegistered, or
+// ErrFrontendKindNotRegistered.
 func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -297,16 +304,16 @@ func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 
 	t := e.targets[cfg.Endpoint.Namespace]
 	if t == nil {
-		return nil, fmt.Errorf("lookup target %q: %w", cfg.Endpoint.Namespace, ErrTargetNotRegistered)
+		return nil, ErrTargetNotRegistered
 	}
 
 	if t.State() == target.Closed {
-		return nil, fmt.Errorf("lookup target %q: %w", cfg.Endpoint.Namespace, ErrTargetNotRegistered)
+		return nil, ErrTargetNotRegistered
 	}
 
 	ctor := e.frontendCtors[cfg.Kind.String()]
 	if ctor == nil {
-		return nil, fmt.Errorf("frontend kind %q: %w", cfg.Kind, ErrFrontendKindNotRegistered)
+		return nil, ErrFrontendKindNotRegistered
 	}
 
 	handler, err := ctor(cfg.Name, cfg.Protocol, cfg.Listen, cfg.Options)
@@ -349,7 +356,7 @@ func (e *Engine) Frontends() []*frontend.Frontend {
 }
 
 // DelFrontend forgets a closed frontend. Live frontends must be closed by their
-// owner before deletion.
+// owner before deletion. Returns ErrClosed or ErrFrontendInUse.
 func (e *Engine) DelFrontend(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -385,9 +392,38 @@ func (e *Engine) joinFrontend(f *frontend.Frontend) {
 func (e *Engine) start() {
 	go func() {
 		e.logger.Info("engine event loop started")
-		<-e.ctx.Done()
-		e.logger.Info("engine event loop stopping")
-		e.Close()
-		e.logger.Info("engine event loop stopped")
+		ticker := time.NewTicker(GroupPollPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-e.ctx.Done():
+				e.logger.Info("engine event loop stopping")
+				e.Close()
+				return
+			case timestamp := <-ticker.C:
+				e.logger.Debug("polling for stale groups")
+				stale, err := e.dplane.StaleGroups()
+				if err != nil {
+					e.logger.Error("poll failed", "err", err)
+					continue
+				}
+				e.detectTimeouts(stale, timestamp)
+			}
+		}
 	}()
+}
+
+func (e *Engine) detectTimeouts(stale []dataplane.Group, timestamp time.Time) {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+	for targetName, target := range e.targets {
+		if slices.Contains(stale, target.Group()) {
+			if timestamp.Sub(e.lastSeen[targetName]) > target.Timeout().ToDuration() {
+				ok := target.Drain()
+				e.logger.Debug("target timeout", "target", targetName, "drain", ok)
+			}
+		} else {
+			e.lastSeen[targetName] = timestamp
+		}
+	}
 }

@@ -2,8 +2,8 @@ package dataplane
 
 import "errors"
 
-// ErrClosed is returned when a caller tries to mutate a closed dataplane.
-var ErrClosed = errors.New("dataplane closed")
+var ErrClosed error = errors.New("closed")
 
-// ErrGroupAlreadyRegistered is returned when a DNAT group name is reused.
 var ErrGroupAlreadyRegistered = errors.New("group already registered")
+
+var ErrNoSuchMapping = errors.New("no such mapping")

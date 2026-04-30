@@ -7,13 +7,13 @@ import (
 	"github.com/UselessMnemonic/proxygw/pkg/config"
 )
 
-func TestDNATMappingOverlaps(t *testing.T) {
+func TestMappingOverlaps(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name  string
-		left  DNATMapping
-		right DNATMapping
+		left  Mapping
+		right Mapping
 		want  bool
 	}{
 		{
@@ -88,7 +88,7 @@ func TestDNATMappingOverlaps(t *testing.T) {
 	}
 }
 
-func mapping(protocol, source, destination string) DNATMapping {
+func mapping(protocol, source, destination string) Mapping {
 	src := netip.MustParseAddrPort(source)
 	dst := netip.MustParseAddrPort(destination)
 
@@ -102,7 +102,7 @@ func mapping(protocol, source, destination string) DNATMapping {
 		panic("unsupported protocol in test")
 	}
 
-	return DNATMapping{
+	return Mapping{
 		Source:      src,
 		Destination: dst,
 		Protocol:    proto,

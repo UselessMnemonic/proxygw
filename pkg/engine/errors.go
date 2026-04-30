@@ -5,7 +5,7 @@ import (
 )
 
 // ErrClosed is returned when the engine has begun shutdown.
-var ErrClosed = errors.New("engine closed")
+var ErrClosed = errors.New("closed")
 
 // ErrTargetKindAlreadyRegistered is returned when a target kind name is reused.
 var ErrTargetKindAlreadyRegistered = errors.New("target kind already registered")

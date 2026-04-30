@@ -1,4 +1,4 @@
-package dataplane
+package connft
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"net/netip"
 
 	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
 
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
@@ -28,7 +29,7 @@ var value6 = nftables.MustConcatSetType(
 	nftables.TypeIP6Addr, nftables.TypeInetService,
 )
 
-func (d *Dataplane) ensureTableAdded() error {
+func (d *Connft) ensureTableAdded() error {
 	// clear any old table
 	existingTable, err := d.nft.ListTableOfFamily(d.name, nftables.TableFamilyINet)
 	if err == nil && existingTable != nil {
@@ -54,7 +55,7 @@ func (d *Dataplane) ensureTableAdded() error {
 		KeyType:       keySpecific4,
 		DataType:      value4,
 	}
-	if err := d.nft.AddSet(d.dnatSpecific4, nil); err != nil {
+	if err = d.nft.AddSet(d.dnatSpecific4, nil); err != nil {
 		return fmt.Errorf("define specific ipv4 dnat set: %w", err)
 	}
 
@@ -67,7 +68,7 @@ func (d *Dataplane) ensureTableAdded() error {
 		KeyType:       keySpecific6,
 		DataType:      value6,
 	}
-	if err := d.nft.AddSet(d.dnatSpecific6, nil); err != nil {
+	if err = d.nft.AddSet(d.dnatSpecific6, nil); err != nil {
 		return fmt.Errorf("define specific ipv6 dnat set: %w", err)
 	}
 
@@ -80,7 +81,7 @@ func (d *Dataplane) ensureTableAdded() error {
 		KeyType:       keyWildcard,
 		DataType:      value4,
 	}
-	if err := d.nft.AddSet(d.dnatWildcard4, nil); err != nil {
+	if err = d.nft.AddSet(d.dnatWildcard4, nil); err != nil {
 		return fmt.Errorf("define wildcard ipv4 dnat set: %w", err)
 	}
 
@@ -93,7 +94,7 @@ func (d *Dataplane) ensureTableAdded() error {
 		KeyType:       keyWildcard,
 		DataType:      value6,
 	}
-	if err := d.nft.AddSet(d.dnatWildcard6, nil); err != nil {
+	if err = d.nft.AddSet(d.dnatWildcard6, nil); err != nil {
 		return fmt.Errorf("define wildcard ipv6 dnat set: %w", err)
 	}
 
@@ -106,16 +107,6 @@ func (d *Dataplane) ensureTableAdded() error {
 		Priority: nftables.ChainPriorityNATDest,
 	}
 	d.nft.AddChain(d.prerouteNATChain)
-
-	// DNAT chain for internal traffic
-	d.outputNATChain = &nftables.Chain{
-		Table:    d.table,
-		Name:     "output",
-		Type:     nftables.ChainTypeNAT,
-		Hooknum:  nftables.ChainHookOutput,
-		Priority: nftables.ChainPriorityNATDest,
-	}
-	d.nft.AddChain(d.outputNATChain)
 
 	// define filter chain for timeouts
 	d.inputFilterChain = &nftables.Chain{
@@ -133,7 +124,6 @@ func (d *Dataplane) ensureTableAdded() error {
 	}
 
 	d.addDNATRules(d.prerouteNATChain)
-	d.addDNATRules(d.outputNATChain)
 
 	// submit changes for base rules
 	if err = d.nft.Flush(); err != nil {
@@ -142,7 +132,7 @@ func (d *Dataplane) ensureTableAdded() error {
 	return nil
 }
 
-func (d *Dataplane) ensureTableDeleted() error {
+func (d *Connft) ensureTableDeleted() error {
 	d.nft.DelTable(d.table)
 	err := d.nft.Flush()
 	if errors.Is(err, unix.ENOENT) {
@@ -151,7 +141,7 @@ func (d *Dataplane) ensureTableDeleted() error {
 	return err
 }
 
-func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort, ttl config.TTL) error {
+func (dg *ConnftGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort, ttl config.TTL) error {
 	if ttl == 0 {
 		return dg.ensureTimeoutDeleted(proto, addr)
 	}
@@ -161,6 +151,12 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 		ttlObj := info.timeoutObj.Obj.(*expr.CtTimeout)
 		ttlObj.Policy[expr.CtStateUDPUNREPLIED] = ttl.Seconds()
 		ttlObj.Policy[expr.CtStateUDPREPLIED] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPESTABLISHED] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPFINWAIT] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPTIMEWAIT] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPCLOSEWAIT] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPLASTACK] = ttl.Seconds()
+		ttlObj.Policy[expr.CtStateTCPCLOSE] = ttl.Seconds()
 		dg.dplane.nft.AddObj(info.timeoutObj)
 		if err := dg.dplane.nft.Flush(); err != nil {
 			return fmt.Errorf("update flow timeout object: %w", err)
@@ -186,8 +182,14 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 			L3Proto: l3Protocol,
 			L4Proto: l4Protocol,
 			Policy: expr.CtStatePolicyTimeout{
-				expr.CtStateUDPUNREPLIED: ttl.Seconds(),
-				expr.CtStateUDPREPLIED:   ttl.Seconds(),
+				expr.CtStateUDPUNREPLIED:   ttl.Seconds(),
+				expr.CtStateUDPREPLIED:     ttl.Seconds(),
+				expr.CtStateTCPESTABLISHED: ttl.Seconds(),
+				expr.CtStateTCPFINWAIT:     ttl.Seconds(),
+				expr.CtStateTCPTIMEWAIT:    ttl.Seconds(),
+				expr.CtStateTCPCLOSEWAIT:   ttl.Seconds(),
+				expr.CtStateTCPLASTACK:     ttl.Seconds(),
+				expr.CtStateTCPCLOSE:       ttl.Seconds(),
 			},
 		},
 	}
@@ -203,7 +205,7 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 	return nil
 }
 
-func (dg *DNATGroup) ensureTimeoutDeleted(proto config.Protocol, addr netip.AddrPort) error {
+func (dg *ConnftGroup) ensureTimeoutDeleted(proto config.Protocol, addr netip.AddrPort) error {
 	info, present := dg.flowInfoBySrc[dnatKey{addr, proto}]
 	if !present {
 		return nil
@@ -221,7 +223,7 @@ func (dg *DNATGroup) ensureTimeoutDeleted(proto config.Protocol, addr netip.Addr
 	return nil
 }
 
-func (dg *DNATGroup) ensureDNATAdded(mappings []DNATMapping) error {
+func (dg *ConnftGroup) ensureDNATAdded(mappings []dataplane.Mapping) error {
 	if len(mappings) == 0 {
 		return nil
 	}
@@ -252,7 +254,7 @@ func (dg *DNATGroup) ensureDNATAdded(mappings []DNATMapping) error {
 	return nil
 }
 
-func (dg *DNATGroup) ensureDNATDeleted(mappings []DNATMapping) error {
+func (dg *ConnftGroup) ensureDNATDeleted(mappings []dataplane.Mapping) error {
 	if len(mappings) == 0 {
 		return nil
 	}

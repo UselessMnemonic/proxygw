@@ -18,10 +18,11 @@ import (
 type Target struct {
 	name    string
 	kind    string
+	timeout config.TTL
 	handler Handler
 	logger  *slog.Logger
 
-	dnat      *dataplane.DNATGroup
+	group     dataplane.Group
 	requests  chan State
 	endpoints map[string]Endpoint
 
@@ -33,13 +34,13 @@ type Target struct {
 	state  State
 }
 
-// New builds a target around a handler handler. The returned target starts
+// New builds a target around a handler. The returned target starts
 // inactive; call Warm before expecting it to serve traffic.
-func New(ctx context.Context, dnat *dataplane.DNATGroup, handler Handler, cfg config.Target) (*Target, error) {
+func New(ctx context.Context, group dataplane.Group, handler Handler, cfg config.Target) (*Target, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
 	}
-	if dnat == nil {
+	if group == nil {
 		return nil, errors.New("dnat is nil")
 	}
 	if handler == nil {
@@ -63,10 +64,11 @@ func New(ctx context.Context, dnat *dataplane.DNATGroup, handler Handler, cfg co
 	t := &Target{
 		name:    cfg.Name,
 		kind:    cfg.Kind.String(),
+		timeout: cfg.IdleTimeout,
 		handler: handler,
 		logger:  slog.Default().With("component", "target", "name", cfg.Name, "kind", cfg.Kind.String()),
 
-		dnat:      dnat,
+		group:     group,
 		requests:  make(chan State, 1),
 		endpoints: endpoints,
 
@@ -86,14 +88,24 @@ func (t *Target) Name() string {
 	return t.name
 }
 
+// Timeout returns the time after which a stale target is Drained by the engine
+func (t *Target) Timeout() config.TTL {
+	return t.timeout
+}
+
+// SetTimeout updates this Target's timeout
+func (t *Target) SetTimeout(timeout config.TTL) {
+	t.timeout = timeout
+}
+
 // Kind returns the target implementation name used to create this instance.
 func (t *Target) Kind() string {
 	return t.kind
 }
 
-// DNATGroup returns the dataplane group owned by this target.
-func (t *Target) DNATGroup() *dataplane.DNATGroup {
-	return t.dnat
+// Group returns the dataplane group owned by this target.
+func (t *Target) Group() dataplane.Group {
+	return t.group
 }
 
 // State returns the target's latest lifecycle state.
@@ -126,7 +138,7 @@ func (t *Target) Endpoints() []Endpoint {
 	return slices.Collect(maps.Values(t.endpoints))
 }
 
-// AddEndpoint adds an endpoint for future frontend bindings.
+// AddEndpoint adds an endpoint for future frontend bindings. Returns ErrClosed.
 func (t *Target) AddEndpoint(endpoint Endpoint) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -145,7 +157,7 @@ func (t *Target) AddEndpoint(endpoint Endpoint) error {
 }
 
 // RemoveEndpoint removes an endpoint by name. Existing frontend bindings are
-// not automatically rewritten.
+// not automatically rewritten. Returns ErrClosed.
 func (t *Target) RemoveEndpoint(name string) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -247,7 +259,7 @@ func (t *Target) warmBlocking() {
 	t.state = Active
 
 	// try to enable DNAT
-	err = t.dnat.Enable()
+	err = t.group.Enable()
 	if err != nil {
 		t.err = fmt.Errorf("failed to enable DNAT: %w", err)
 		t.logger.Error("warm completed", "err", t.err)
@@ -283,7 +295,7 @@ func (t *Target) drainBlocking() {
 	t.state = Inactive
 
 	// try to disable DNAT
-	err = t.dnat.Disable()
+	err = t.group.Disable()
 	if err != nil {
 		t.err = fmt.Errorf("failed to disable DNAT: %w", err)
 		t.logger.Error("drain completed", "err", t.err)
@@ -299,7 +311,7 @@ func (t *Target) endBlocking() {
 
 	err := errors.Join(
 		t.handler.Close(),
-		t.dnat.Close(),
+		t.group.Close(),
 	)
 
 	t.lock.Lock()
@@ -338,11 +350,6 @@ func (t *Target) start() {
 				default:
 					continue
 				}
-			case timeout := <-t.dnat.Timeout():
-				t.logger.Info("timeout event", "timestamp", timeout.Timestamp)
-				go func() {
-					t.Drain()
-				}()
 			}
 		}
 	})

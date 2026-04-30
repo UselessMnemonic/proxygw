@@ -1,4 +1,4 @@
-package dataplane
+package connft
 
 import (
 	"encoding/binary"
@@ -7,12 +7,13 @@ import (
 	"net/netip"
 
 	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
 	"golang.org/x/sys/unix"
 )
 
-func (d *Dataplane) addDNATRules(chain *nftables.Chain) {
+func (d *Connft) addDNATRules(chain *nftables.Chain) {
 	// Wildcard IPv4 DNAT key: meta l4proto . th dport.
 	// Lookup returns mapped IPv4 address . mapped port in NFT_REG_1+.
 	d.nft.AddRule(&nftables.Rule{
@@ -194,7 +195,7 @@ func (d *Dataplane) addDNATRules(chain *nftables.Chain) {
 	})
 }
 
-func (d *Dataplane) defineTimeoutRule(l4Protocol uint8, addr netip.AddrPort, timeoutObj *nftables.NamedObj) *nftables.Rule {
+func (d *Connft) defineTimeoutRule(l4Protocol uint8, addr netip.AddrPort, timeoutObj *nftables.NamedObj) *nftables.Rule {
 	timeoutRule := &nftables.Rule{
 		Table: d.table,
 		Chain: d.inputFilterChain,
@@ -383,7 +384,7 @@ func (d *Dataplane) defineTimeoutRule(l4Protocol uint8, addr netip.AddrPort, tim
 	return timeoutRule
 }
 
-func compileSetElement(mapping DNATMapping) nftables.SetElement {
+func compileSetElement(mapping dataplane.Mapping) nftables.SetElement {
 	key := encodeSpecificKey(mapping.Protocol, mapping.Source)
 	if mapping.Source.Addr().IsUnspecified() {
 		key = encodeWildcardKey(mapping.Protocol, mapping.Source.Port())

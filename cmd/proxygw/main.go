@@ -17,6 +17,8 @@ import (
 
 	"github.com/UselessMnemonic/proxygw/internal/plugin"
 	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane/connft"
 	"github.com/UselessMnemonic/proxygw/pkg/engine"
 	"github.com/UselessMnemonic/proxygw/pkg/frontend"
 	"github.com/UselessMnemonic/proxygw/pkg/target"
@@ -79,15 +81,25 @@ func run(logger *slog.Logger, configPath string) (err error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	logger.Info("creating engine", "name", "proxygw")
-	eng, err := engine.New(ctx, "proxygw")
+	logger.Info("creating dataplane", "name", "proxygw")
+	dplane, err := connft.New("proxygw")
 	if err != nil {
+		return fmt.Errorf("create dataplane: %w", err)
+	}
+	logger.Info("dataplane created", "name", "proxygw")
+
+	logger.Info("creating engine", "name", "proxygw")
+	eng, err := engine.New(ctx, dplane)
+	if err != nil {
+		closeDataplane(logger, dplane)
 		return fmt.Errorf("create engine: %w", err)
 	}
-	defer closeEngine(logger, eng)
 	logger.Info("engine created", "name", "proxygw")
 
-	return pluginScope(logger, ctx, cfg, eng)
+	err = pluginScope(logger, ctx, cfg, eng)
+	closeEngine(logger, eng)
+	closeDataplane(logger, dplane)
+	return err
 }
 
 func loadConfig(path string) (*config.Config, error) {
@@ -226,4 +238,16 @@ func closeEngine(logger *slog.Logger, eng *engine.Engine) {
 	eng.Close()
 	eng.Wait()
 	logger.Info("engine closed")
+}
+
+func closeDataplane(logger *slog.Logger, dplane dataplane.Dataplane) {
+	if dplane == nil {
+		return
+	}
+	logger.Info("closing dataplane", "name", dplane.Name())
+	if err := dplane.Close(); err != nil {
+		logger.Error("close dataplane failed", "name", dplane.Name(), "err", err)
+		return
+	}
+	logger.Info("dataplane closed", "name", dplane.Name())
 }
