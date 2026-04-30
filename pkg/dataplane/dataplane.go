@@ -9,7 +9,7 @@ type Dataplane interface {
 	// Returns ErrClosed or ErrGroupAlreadyRegistered.
 	NewGroup(name string) (Group, error)
 	// StaleGroups is a potentially long, blocking operation that retrieves
-	// the Groups known to be stale from since a given time.
+	// the Groups known to be stale.
 	// A Group is considered stale when there is no traffic known to
 	// the dataplane to any Mapping.Destination. Returns ErrClosed.
 	StaleGroups() ([]Group, error)
