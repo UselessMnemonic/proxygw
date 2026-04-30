@@ -31,7 +31,7 @@ type Connft struct {
 	closed bool
 }
 
-// New creates a new Dataplane backed by a flow table with the given name
+// New creates a new Dataplane backed by a flow table with the given name.
 func New(name string) (*Connft, error) {
 	ct, err := conntrack.Dial(nil)
 	if err != nil {

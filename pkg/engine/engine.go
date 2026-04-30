@@ -99,7 +99,7 @@ func (e *Engine) Closed() bool {
 
 // AddFrontendKind makes a frontend implementation available to configuration
 // and API calls. Names are conventionally namespace-qualified, such as
-// "static:http".
+// "static:http". Returns ErrClosed or ErrFrontendKindAlreadyRegistered.
 func (e *Engine) AddFrontendKind(name string, kind frontend.HandlerCtor) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -132,7 +132,7 @@ func (e *Engine) FrontendKinds() []frontend.HandlerCtor {
 }
 
 // DelFrontendKind unregisters a frontend implementation so new frontends can no
-// longer use it.
+// longer use it. Returns ErrClosed or ErrFrontendKindNotRegistered.
 func (e *Engine) DelFrontendKind(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -155,6 +155,7 @@ func (e *Engine) DelFrontendKind(name string) error {
 
 // AddTargetKind makes a target implementation available to configuration and
 // API calls. Names are conventionally namespace-qualified, such as "static:cmd".
+// Returns ErrClosed or ErrTargetKindAlreadyRegistered.
 func (e *Engine) AddTargetKind(name string, kind target.HandlerCtor) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -187,7 +188,7 @@ func (e *Engine) TargetKinds() []target.HandlerCtor {
 }
 
 // DelTargetKind unregisters a target implementation so new targets can no
-// longer use it.
+// longer use it. Returns ErrClosed or ErrTargetKindNotRegistered.
 func (e *Engine) DelTargetKind(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -210,6 +211,8 @@ func (e *Engine) DelTargetKind(name string) error {
 
 // NewTarget creates a target from the given configuration. Target names must be
 // unique for the lifetime of the engine unless a closed target is deleted first.
+// Returns ErrClosed, ErrTargetAlreadyRegistered, or
+// ErrTargetKindNotRegistered.
 func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -268,7 +271,7 @@ func (e *Engine) Targets() []*target.Target {
 }
 
 // DelTarget forgets a closed target. Live targets must be closed by their owner
-// before deletion.
+// before deletion. Returns ErrClosed or ErrTargetInUse.
 func (e *Engine) DelTarget(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -289,7 +292,9 @@ func (e *Engine) DelTarget(name string) error {
 }
 
 // NewFrontend creates a frontend from the given configuration. The referenced
-// target and endpoint must already exist.
+// target and endpoint must already exist. Returns ErrClosed,
+// ErrFrontendAlreadyRegistered, ErrTargetNotRegistered, or
+// ErrFrontendKindNotRegistered.
 func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
@@ -356,7 +361,7 @@ func (e *Engine) Frontends() []*frontend.Frontend {
 }
 
 // DelFrontend forgets a closed frontend. Live frontends must be closed by their
-// owner before deletion.
+// owner before deletion. Returns ErrClosed or ErrFrontendInUse.
 func (e *Engine) DelFrontend(name string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()

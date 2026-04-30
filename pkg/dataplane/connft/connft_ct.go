@@ -11,7 +11,7 @@ import (
 
 var StatusDNATDone = conntrack.NewFilter().Status(conntrack.StatusDstNATDone)
 
-// StaleGroups polls conntrack for stale entries
+// StaleGroups polls conntrack for stale entries. Returns dataplane.ErrClosed.
 func (d *Connft) StaleGroups() ([]dataplane.Group, error) {
 	d.lock.RLock()
 	if d.closed {

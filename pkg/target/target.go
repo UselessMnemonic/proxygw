@@ -138,7 +138,7 @@ func (t *Target) Endpoints() []Endpoint {
 	return slices.Collect(maps.Values(t.endpoints))
 }
 
-// AddEndpoint adds an endpoint for future frontend bindings.
+// AddEndpoint adds an endpoint for future frontend bindings. Returns ErrClosed.
 func (t *Target) AddEndpoint(endpoint Endpoint) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -157,7 +157,7 @@ func (t *Target) AddEndpoint(endpoint Endpoint) error {
 }
 
 // RemoveEndpoint removes an endpoint by name. Existing frontend bindings are
-// not automatically rewritten.
+// not automatically rewritten. Returns ErrClosed.
 func (t *Target) RemoveEndpoint(name string) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()

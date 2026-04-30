@@ -37,11 +37,14 @@ type ConnftGroup struct {
 	closed        bool
 }
 
+// NewGroup registers a new valid Group to the underlying dataplane. Returns
+// dataplane.ErrClosed or dataplane.ErrGroupAlreadyRegistered.
 func (d *Connft) NewGroup(name string) (dataplane.Group, error) {
 	return d.NewConnftGroup(name)
 }
 
-// NewConnftGroup reserves a mapping group with the given name.
+// NewConnftGroup reserves a mapping group with the given name. Returns
+// dataplane.ErrClosed or dataplane.ErrGroupAlreadyRegistered.
 func (d *Connft) NewConnftGroup(name string) (*ConnftGroup, error) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
@@ -81,7 +84,8 @@ func (dg *ConnftGroup) IsEnabled() bool {
 	return dg.enabled
 }
 
-// Timeout returns the conntrack timeout configured for a mapping.
+// Timeout returns the conntrack timeout configured for a mapping. Returns
+// dataplane.ErrClosed or dataplane.ErrNoSuchMapping.
 func (dg *ConnftGroup) Timeout(protocol config.Protocol, source netip.AddrPort) (config.TTL, error) {
 	dg.dplane.lock.RLock()
 	defer dg.dplane.lock.RUnlock()
@@ -97,7 +101,8 @@ func (dg *ConnftGroup) Timeout(protocol config.Protocol, source netip.AddrPort) 
 	return m.Timeout, nil
 }
 
-// SetTimeout changes the conntrack timeout for an existing mapping.
+// SetTimeout changes the conntrack timeout for an existing mapping. Returns
+// dataplane.ErrClosed or dataplane.ErrNoSuchMapping.
 func (dg *ConnftGroup) SetTimeout(protocol config.Protocol, source netip.AddrPort, timeout config.TTL) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
@@ -133,7 +138,8 @@ func (dg *ConnftGroup) Mappings() []dataplane.Mapping {
 	return dg.mappings()
 }
 
-// AddMappings adds one or more non-overlapping mappings to the group.
+// AddMappings adds one or more non-overlapping mappings to the group. Returns
+// dataplane.ErrClosed.
 func (dg *ConnftGroup) AddMappings(mappings ...dataplane.Mapping) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
@@ -145,7 +151,8 @@ func (dg *ConnftGroup) AddMappings(mappings ...dataplane.Mapping) error {
 	return dg.addMappings(mappings)
 }
 
-// DelMappings removes exact mappings from the group.
+// DelMappings removes exact mappings from the group. Returns
+// dataplane.ErrClosed or dataplane.ErrNoSuchMapping.
 func (dg *ConnftGroup) DelMappings(mappings ...dataplane.Mapping) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
@@ -157,7 +164,8 @@ func (dg *ConnftGroup) DelMappings(mappings ...dataplane.Mapping) error {
 	return dg.delMappings(mappings)
 }
 
-// ClearMappings removes every mapping from the group.
+// ClearMappings removes every mapping from the group. Returns
+// dataplane.ErrClosed.
 func (dg *ConnftGroup) ClearMappings() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
@@ -169,7 +177,8 @@ func (dg *ConnftGroup) ClearMappings() error {
 	return dg.clearMappings()
 }
 
-// Enable installs this group's mappings so traffic can be forwarded.
+// Enable installs this group's mappings so traffic can be forwarded. Returns
+// dataplane.ErrClosed.
 func (dg *ConnftGroup) Enable() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
@@ -190,7 +199,8 @@ func (dg *ConnftGroup) Enable() error {
 	return err
 }
 
-// Disable removes this group's mappings from the live dataplane.
+// Disable removes this group's mappings from the live dataplane. Returns
+// dataplane.ErrClosed.
 func (dg *ConnftGroup) Disable() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
@@ -211,7 +221,8 @@ func (dg *ConnftGroup) Disable() error {
 	return err
 }
 
-// Close evicts this group from its parent Dataplane and renders this group unusable.
+// Close evicts this group from its parent Dataplane and renders this group
+// unusable. It is safe to call more than once.
 func (dg *ConnftGroup) Close() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()

@@ -35,7 +35,7 @@ type Frontend struct {
 
 // New builds a frontend around a handler and reserves its dataplane
 // mapping. The caller still needs to call Start before the listener accepts
-// traffic.
+// traffic. Dataplane binding errors are wrapped.
 func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, handler Handler, cfg config.Frontend) (*Frontend, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
