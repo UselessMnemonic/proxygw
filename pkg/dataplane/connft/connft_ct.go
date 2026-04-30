@@ -53,10 +53,12 @@ func (d *Connft) StaleGroups() ([]dataplane.Group, error) {
 			flow.TupleReply.Proto.SourcePort,
 		)
 		flowProto := flow.TupleReply.Proto.Protocol
+		d.logger.Debug("conntrack saw a flow", "dst", flowDst)
 
 		for groupName, group := range notSeen {
-			_, exists := group.mappingsByDst[dnatKey{flowDst, config.Protocol(flowProto)}]
-			if exists {
+			_, seen := group.mappingsByDst[dnatKey{flowDst, config.Protocol(flowProto)}]
+			d.logger.Debug("conntrack matched a group", "group", groupName, "dst", flowDst)
+			if seen {
 				delete(notSeen, groupName)
 			}
 		}
