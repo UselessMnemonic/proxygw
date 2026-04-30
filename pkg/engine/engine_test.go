@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane/connft"
 	"github.com/UselessMnemonic/proxygw/pkg/frontend"
 	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
@@ -362,14 +363,23 @@ func mustNewTestEngine(t *testing.T) *Engine {
 	t.Helper()
 
 	tableName := testDataplaneName(t)
-	e, err := New(context.Background(), tableName)
+	dplane, err := connft.New(tableName)
 	if err != nil {
+		t.Fatalf("connft.New() error = %v", err)
+	}
+
+	e, err := New(context.Background(), dplane)
+	if err != nil {
+		_ = dplane.Close()
 		t.Fatalf("New() error = %v", err)
 	}
 
 	t.Cleanup(func() {
 		e.Close()
 		e.Wait()
+		if err := dplane.Close(); err != nil {
+			t.Fatalf("dataplane Close() error = %v", err)
+		}
 		waitForProxyGWTableDeleted(t, tableName)
 	})
 

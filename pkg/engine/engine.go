@@ -12,7 +12,6 @@ import (
 
 	"github.com/UselessMnemonic/proxygw/pkg/config"
 	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
-	"github.com/UselessMnemonic/proxygw/pkg/dataplane/connft"
 	"github.com/UselessMnemonic/proxygw/pkg/frontend"
 	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
@@ -38,18 +37,14 @@ type Engine struct {
 	closed bool
 }
 
-// New prepares a gateway engine with the given name. Keep this name stable
-// across restarts for the same gateway instance because it is used for
-// dataplane resources.
-func New(ctx context.Context, name string) (*Engine, error) {
-	ctx, cancel := context.WithCancel(ctx)
-	logger := slog.Default().With("component", "engine", "dataplane", name)
-
-	dplane, err := connft.New(name)
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("creating dataplane: %w", err)
+// New prepares a gateway engine using the supplied dataplane.
+func New(ctx context.Context, dplane dataplane.Dataplane) (*Engine, error) {
+	if dplane == nil {
+		return nil, errors.New("dataplane is nil")
 	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	logger := slog.Default().With("component", "engine", "dataplane", dplane.Name())
 
 	e := &Engine{
 		dplane:        dplane,
@@ -404,11 +399,6 @@ func (e *Engine) start() {
 			case <-e.ctx.Done():
 				e.logger.Info("engine event loop stopping")
 				e.Close()
-				go func() {
-					e.Wait()
-					e.dplane.Close()
-					e.logger.Info("engine event loop stopped")
-				}()
 				return
 			case timestamp := <-ticker.C:
 				e.logger.Debug("polling for stale groups", "timestamp", timestamp)
