@@ -401,7 +401,7 @@ func (e *Engine) start() {
 				e.Close()
 				return
 			case timestamp := <-ticker.C:
-				e.logger.Debug("polling for stale groups", "timestamp", timestamp)
+				e.logger.Debug("polling for stale groups")
 				stale, err := e.dplane.StaleGroups()
 				if err != nil {
 					e.logger.Error("poll failed", "err", err)

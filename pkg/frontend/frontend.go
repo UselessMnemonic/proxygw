@@ -281,8 +281,8 @@ func (f *Frontend) start() {
 			case <-f.ctx.Done():
 				return
 			case <-f.handler.ShouldWarm():
-				f.logger.Info("warm signal received")
-				f.target.Warm()
+				ok := f.target.Warm()
+				f.logger.Info("warm signal received", "warm", ok)
 			case next := <-f.requests:
 				switch next {
 				case Starting:
