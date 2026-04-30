@@ -170,3 +170,7 @@ Frontend and target handler interfaces live in `pkg/frontend/handler.go` and `pk
 - `plugin/ctl`: built-in control IPC plugin.
 - `plugin/static`: built-in static frontend and target plugin.
 - `init/systemd`: systemd service template.
+
+## Known Issues / TODOs
+- Conntrack is currently polled rather than subcribed to, therefore use a sufficiently large timeout for any target.
+- There is no support for the `output` chain, therefore local traffic is never proxied
