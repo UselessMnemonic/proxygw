@@ -12,7 +12,7 @@ type Group interface {
 	// This operation is atomic, either all mappings are enabled or none are.
 	Enable() error
 	// Disable causes the underlying dataplane to disable DNAT for all mappings.
-	// This operation is atoomic, either all mappings are disabled or none are.
+	// This operation is atomic, either all mappings are disabled or none are.
 	Disable() error
 	// AddMappings defines the given mappings in this group.
 	// This operation is atomic, either all mappings are added or none are.
@@ -37,6 +37,6 @@ type Group interface {
 	SetTimeout(protocol config.Protocol, source netip.AddrPort, timeout config.TTL) error
 	// Close invalidates this group, rendering it useless. It is safe to call multiple times.
 	// All mappings are deleted with the same effect as DelMappings.
-	// When a group is closed, all operations return GroupClosed
+	// When a group is closed, all operations return ErrClosed.
 	Close() error
 }

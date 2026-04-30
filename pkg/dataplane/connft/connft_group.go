@@ -75,6 +75,9 @@ func (dg *ConnftGroup) Name() string {
 func (dg *ConnftGroup) IsEnabled() bool {
 	dg.dplane.lock.RLock()
 	defer dg.dplane.lock.RUnlock()
+	if dg.closed || dg.dplane.closed {
+		return false
+	}
 	return dg.enabled
 }
 
@@ -82,6 +85,11 @@ func (dg *ConnftGroup) IsEnabled() bool {
 func (dg *ConnftGroup) Timeout(protocol config.Protocol, source netip.AddrPort) (config.TTL, error) {
 	dg.dplane.lock.RLock()
 	defer dg.dplane.lock.RUnlock()
+
+	if dg.closed || dg.dplane.closed {
+		return 0, dataplane.ErrClosed
+	}
+
 	m, exists := dg.mappingsBySrc[dnatKey{source, protocol}]
 	if !exists {
 		return 0, dataplane.ErrNoSuchMapping
@@ -93,6 +101,11 @@ func (dg *ConnftGroup) Timeout(protocol config.Protocol, source netip.AddrPort) 
 func (dg *ConnftGroup) SetTimeout(protocol config.Protocol, source netip.AddrPort, timeout config.TTL) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
+
+	if dg.closed || dg.dplane.closed {
+		return dataplane.ErrClosed
+	}
+
 	m, exists := dg.mappingsBySrc[dnatKey{source, protocol}]
 	if !exists {
 		return dataplane.ErrNoSuchMapping
@@ -114,6 +127,9 @@ func (dg *ConnftGroup) SetTimeout(protocol config.Protocol, source netip.AddrPor
 func (dg *ConnftGroup) Mappings() []dataplane.Mapping {
 	dg.dplane.lock.RLock()
 	defer dg.dplane.lock.RUnlock()
+	if dg.closed || dg.dplane.closed {
+		return nil
+	}
 	return dg.mappings()
 }
 
@@ -121,6 +137,11 @@ func (dg *ConnftGroup) Mappings() []dataplane.Mapping {
 func (dg *ConnftGroup) AddMappings(mappings ...dataplane.Mapping) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
+
+	if dg.closed || dg.dplane.closed {
+		return dataplane.ErrClosed
+	}
+
 	return dg.addMappings(mappings)
 }
 
@@ -128,6 +149,11 @@ func (dg *ConnftGroup) AddMappings(mappings ...dataplane.Mapping) error {
 func (dg *ConnftGroup) DelMappings(mappings ...dataplane.Mapping) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
+
+	if dg.closed || dg.dplane.closed {
+		return dataplane.ErrClosed
+	}
+
 	return dg.delMappings(mappings)
 }
 
@@ -135,6 +161,11 @@ func (dg *ConnftGroup) DelMappings(mappings ...dataplane.Mapping) error {
 func (dg *ConnftGroup) ClearMappings() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
+
+	if dg.closed || dg.dplane.closed {
+		return dataplane.ErrClosed
+	}
+
 	return dg.clearMappings()
 }
 
@@ -142,6 +173,11 @@ func (dg *ConnftGroup) ClearMappings() error {
 func (dg *ConnftGroup) Enable() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
+
+	if dg.closed || dg.dplane.closed {
+		return dataplane.ErrClosed
+	}
+
 	if dg.enabled {
 		return nil
 	}
@@ -158,6 +194,11 @@ func (dg *ConnftGroup) Enable() error {
 func (dg *ConnftGroup) Disable() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
+
+	if dg.closed || dg.dplane.closed {
+		return dataplane.ErrClosed
+	}
+
 	if !dg.enabled {
 		return nil
 	}
@@ -186,10 +227,20 @@ func (dg *ConnftGroup) addMappings(mappings []dataplane.Mapping) error {
 		return nil
 	}
 
-	// check if the mappings already exist in existing groups
-	for _, m := range mappings {
+	// check for conflicts
+	for i, m := range mappings {
 		if err := m.Validate(); err != nil {
 			return err
+		}
+		for j := 0; j < i; j++ {
+			x := mappings[j]
+			if m.Overlaps(&x) {
+				return fmt.Errorf(
+					"new mapping (proto=%s,src=%s,dst=%s) overlaps with new mapping (proto=%s,src=%s,dst=%s)",
+					m.Protocol, m.Source, m.Destination,
+					x.Protocol, x.Source, x.Destination,
+				)
+			}
 		}
 		for currGroupName, currGroup := range dg.dplane.groups {
 			for _, x := range currGroup.mappingsBySrc {
@@ -204,7 +255,7 @@ func (dg *ConnftGroup) addMappings(mappings []dataplane.Mapping) error {
 		}
 	}
 
-	// update nftables
+	// ensure DNAT is actiavted immediately if needed
 	if dg.enabled {
 		err := dg.ensureDNATAdded(mappings)
 		if err != nil {
@@ -212,7 +263,6 @@ func (dg *ConnftGroup) addMappings(mappings []dataplane.Mapping) error {
 		}
 	}
 
-	// update mappings
 	for _, m := range mappings {
 		dg.mappingsBySrc[dnatKey{m.Source, m.Protocol}] = m
 		dg.mappingsByDst[dnatKey{m.Destination, m.Protocol}] = m

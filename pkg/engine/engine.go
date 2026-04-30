@@ -224,7 +224,7 @@ func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 
 	factory := e.targetCtors[cfg.Kind.String()]
 	if factory == nil {
-		return nil, fmt.Errorf("lookup kind %q: %w", cfg.Kind, ErrTargetKindNotRegistered)
+		return nil, ErrTargetKindNotRegistered
 	}
 
 	handler, err := factory(cfg.Name, cfg.Options)
@@ -304,16 +304,16 @@ func (e *Engine) NewFrontend(cfg config.Frontend) (*frontend.Frontend, error) {
 
 	t := e.targets[cfg.Endpoint.Namespace]
 	if t == nil {
-		return nil, fmt.Errorf("lookup target %q: %w", cfg.Endpoint.Namespace, ErrTargetNotRegistered)
+		return nil, ErrTargetNotRegistered
 	}
 
 	if t.State() == target.Closed {
-		return nil, fmt.Errorf("lookup target %q: %w", cfg.Endpoint.Namespace, ErrTargetNotRegistered)
+		return nil, ErrTargetNotRegistered
 	}
 
 	ctor := e.frontendCtors[cfg.Kind.String()]
 	if ctor == nil {
-		return nil, fmt.Errorf("frontend kind %q: %w", cfg.Kind, ErrFrontendKindNotRegistered)
+		return nil, ErrFrontendKindNotRegistered
 	}
 
 	handler, err := ctor(cfg.Name, cfg.Protocol, cfg.Listen, cfg.Options)

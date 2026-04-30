@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
 
 	"github.com/google/nftables"
 	"golang.org/x/sys/unix"
@@ -25,15 +26,15 @@ func TestDataplaneLifecycle(t *testing.T) {
 		t.Fatal("expected proxygw table to exist after bring-up")
 	}
 
-	group, err := d.NewDNATGroup("lifecycle", config.TTL(30))
+	group, err := d.NewConnftGroup("lifecycle")
 	if err != nil {
-		t.Fatalf("NewDNATGroup() error = %v", err)
+		t.Fatalf("NewConnftGroup() error = %v", err)
 	}
 
-	initial := DNATMapping{
+	initial := dataplane.Mapping{
 		Source:      netip.MustParseAddrPort("127.0.0.1:8080"),
 		Destination: netip.MustParseAddrPort("127.0.0.2:8080"),
-		FlowTimeout: config.TTL(15),
+		Timeout:     config.TTL(15),
 		Protocol:    config.ProtocolTCP,
 	}
 	if err := group.AddMappings(initial); err != nil {
@@ -49,10 +50,10 @@ func TestDataplaneLifecycle(t *testing.T) {
 		t.Fatalf("len(Mappings()) after bring-up = %d, want 1", got)
 	}
 
-	update := DNATMapping{
+	update := dataplane.Mapping{
 		Source:      netip.MustParseAddrPort("127.0.0.1:9090"),
 		Destination: netip.MustParseAddrPort("127.0.0.3:9090"),
-		FlowTimeout: config.TTL(20),
+		Timeout:     config.TTL(20),
 		Protocol:    config.ProtocolTCP,
 	}
 	if err := group.AddMappings(update); err != nil {
@@ -62,14 +63,19 @@ func TestDataplaneLifecycle(t *testing.T) {
 		t.Fatalf("len(Mappings()) after update = %d, want 2", got)
 	}
 
-	d.Close()
+	if err := d.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 	waitForProxyGWTableDeleted(t, tableName)
 
-	if d.Error() != nil {
-		t.Fatalf("Error() after tear-down = %v, want nil", d.Error())
+	if _, err := d.NewConnftGroup("after-close"); !errors.Is(err, dataplane.ErrClosed) {
+		t.Fatalf("NewConnftGroup() after Close error = %v, want %v", err, dataplane.ErrClosed)
 	}
-	if _, err := d.NewDNATGroup("after-close", config.TTL(1)); !errors.Is(err, ErrClosed) {
-		t.Fatalf("NewDNATGroup() after Close error = %v, want %v", err, ErrClosed)
+	if _, err := d.StaleGroups(); !errors.Is(err, dataplane.ErrClosed) {
+		t.Fatalf("StaleGroups() after Close error = %v, want %v", err, dataplane.ErrClosed)
+	}
+	if err := group.AddMappings(initial); !errors.Is(err, dataplane.ErrClosed) {
+		t.Fatalf("AddMappings() after dataplane Close error = %v, want %v", err, dataplane.ErrClosed)
 	}
 
 	table = lookupProxyGWTable(t, tableName)
@@ -78,7 +84,74 @@ func TestDataplaneLifecycle(t *testing.T) {
 	}
 }
 
-func mustNewTestDataplane(t *testing.T, tableName string) *Dataplane {
+func TestGroupRejectsOverlappingBatchAtomically(t *testing.T) {
+	t.Parallel()
+
+	tableName := testDataplaneName(t)
+	d := mustNewTestDataplane(t, tableName)
+
+	group, err := d.NewConnftGroup("batch")
+	if err != nil {
+		t.Fatalf("NewConnftGroup() error = %v", err)
+	}
+
+	first := testMapping("127.0.0.1:1001", "127.0.0.2:2001", config.TTL(15))
+	overlapping := testMapping("127.0.0.3:1003", "127.0.0.2:2001", config.TTL(20))
+
+	if err := group.AddMappings(first, overlapping); err == nil {
+		t.Fatal("AddMappings(overlapping batch) error = nil, want error")
+	}
+	if got := len(group.Mappings()); got != 0 {
+		t.Fatalf("len(Mappings()) after rejected batch = %d, want 0", got)
+	}
+}
+
+func TestGroupOperationsAfterCloseReturnErrClosed(t *testing.T) {
+	t.Parallel()
+
+	tableName := testDataplaneName(t)
+	d := mustNewTestDataplane(t, tableName)
+
+	group, err := d.NewConnftGroup("closed")
+	if err != nil {
+		t.Fatalf("NewConnftGroup() error = %v", err)
+	}
+
+	mapping := testMapping("127.0.0.1:1001", "127.0.0.2:2001", config.TTL(15))
+	if err := group.AddMappings(mapping); err != nil {
+		t.Fatalf("AddMappings() error = %v", err)
+	}
+	if err := group.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	if err := group.AddMappings(mapping); !errors.Is(err, dataplane.ErrClosed) {
+		t.Fatalf("AddMappings() after Close error = %v, want %v", err, dataplane.ErrClosed)
+	}
+	if err := group.DelMappings(mapping); !errors.Is(err, dataplane.ErrClosed) {
+		t.Fatalf("DelMappings() after Close error = %v, want %v", err, dataplane.ErrClosed)
+	}
+	if err := group.ClearMappings(); !errors.Is(err, dataplane.ErrClosed) {
+		t.Fatalf("ClearMappings() after Close error = %v, want %v", err, dataplane.ErrClosed)
+	}
+	if err := group.Enable(); !errors.Is(err, dataplane.ErrClosed) {
+		t.Fatalf("Enable() after Close error = %v, want %v", err, dataplane.ErrClosed)
+	}
+	if err := group.Disable(); !errors.Is(err, dataplane.ErrClosed) {
+		t.Fatalf("Disable() after Close error = %v, want %v", err, dataplane.ErrClosed)
+	}
+	if _, err := group.Timeout(mapping.Protocol, mapping.Source); !errors.Is(err, dataplane.ErrClosed) {
+		t.Fatalf("Timeout() after Close error = %v, want %v", err, dataplane.ErrClosed)
+	}
+	if err := group.SetTimeout(mapping.Protocol, mapping.Source, config.TTL(30)); !errors.Is(err, dataplane.ErrClosed) {
+		t.Fatalf("SetTimeout() after Close error = %v, want %v", err, dataplane.ErrClosed)
+	}
+	if err := group.Close(); err != nil {
+		t.Fatalf("second Close() error = %v, want nil", err)
+	}
+}
+
+func mustNewTestDataplane(t *testing.T, tableName string) *Connft {
 	t.Helper()
 
 	d, err := New(tableName)
@@ -136,4 +209,13 @@ func testDataplaneName(t *testing.T) string {
 	name := strings.ToLower(t.Name())
 	name = strings.NewReplacer("/", "_", " ", "_", "-", "_").Replace(name)
 	return fmt.Sprintf("proxygw_%s", name)
+}
+
+func testMapping(source, destination string, timeout config.TTL) dataplane.Mapping {
+	return dataplane.Mapping{
+		Source:      netip.MustParseAddrPort(source),
+		Destination: netip.MustParseAddrPort(destination),
+		Timeout:     timeout,
+		Protocol:    config.ProtocolTCP,
+	}
 }

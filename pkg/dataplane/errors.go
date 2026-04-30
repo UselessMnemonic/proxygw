@@ -6,4 +6,4 @@ var ErrClosed error = errors.New("closed")
 
 var ErrGroupAlreadyRegistered = errors.New("group already registered")
 
-var ErrNoSuchMapping = errors.New("no mapping found")
+var ErrNoSuchMapping = errors.New("no such mapping")
