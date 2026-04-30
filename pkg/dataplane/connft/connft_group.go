@@ -1,4 +1,4 @@
-package dataplane
+package connft
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
 
 	"github.com/google/nftables"
 )
@@ -22,140 +23,123 @@ type flowInfo struct {
 	timeoutRule *nftables.Rule
 }
 
-// DNATGroup collects the mappings for one target. Enable and Disable switch the
+// ConnftGroup collects the mappings for one target. Enable and Disable switch the
 // whole group in and out of the live dataplane.
-type DNATGroup struct {
-	dplane        *Dataplane
+type ConnftGroup struct {
+	dplane        *Connft
 	name          string
-	mappingsBySrc map[dnatKey]DNATMapping
+	mappingsBySrc map[dnatKey]dataplane.Mapping
+	mappingsByDst map[dnatKey]dataplane.Mapping
 	flowInfoBySrc map[dnatKey]flowInfo
-	timeouts      chan DNATGroupTimeoutEvent
 	lastSeen      time.Time
 	ttl           config.TTL
 	enabled       bool
 	closed        bool
 }
 
-// NewDNATGroup reserves a mapping group with the given name.
-func (d *Dataplane) NewDNATGroup(name string, ttl config.TTL) (*DNATGroup, error) {
+func (d *Connft) NewGroup(name string) (dataplane.Group, error) {
+	return d.NewConnftGroup(name)
+}
+
+// NewConnftGroup reserves a mapping group with the given name.
+func (d *Connft) NewConnftGroup(name string) (*ConnftGroup, error) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 	if d.closed {
-		return nil, ErrClosed
+		return nil, dataplane.ErrClosed
 	}
-	if _, exists := d.dnatGroups[name]; exists {
-		return nil, ErrGroupAlreadyRegistered
+	if _, exists := d.groups[name]; exists {
+		return nil, dataplane.ErrGroupAlreadyRegistered
 	}
 
-	dg := &DNATGroup{
+	dg := &ConnftGroup{
 		dplane:        d,
 		name:          name,
-		mappingsBySrc: make(map[dnatKey]DNATMapping),
+		mappingsBySrc: make(map[dnatKey]dataplane.Mapping),
+		mappingsByDst: make(map[dnatKey]dataplane.Mapping),
 		flowInfoBySrc: make(map[dnatKey]flowInfo),
-		timeouts:      make(chan DNATGroupTimeoutEvent, 10),
 		lastSeen:      time.Now(),
-		ttl:           ttl,
 		enabled:       false,
 		closed:        false,
 	}
-	d.dnatGroups[name] = dg
+	d.groups[name] = dg
 	return dg, nil
 }
 
 // Name returns the group name.
-func (dg *DNATGroup) Name() string {
+func (dg *ConnftGroup) Name() string {
 	return dg.name
 }
 
-// Timeout returns idle notifications for the group.
-func (dg *DNATGroup) Timeout() <-chan DNATGroupTimeoutEvent {
-	return dg.timeouts
-}
-
 // IsEnabled reports whether this group's mappings are currently installed.
-func (dg *DNATGroup) IsEnabled() bool {
+func (dg *ConnftGroup) IsEnabled() bool {
 	dg.dplane.lock.RLock()
 	defer dg.dplane.lock.RUnlock()
 	return dg.enabled
 }
 
-// GroupTimeout returns the idle timeout used to decide when the whole target
-// can be drained.
-func (dg *DNATGroup) GroupTimeout() config.TTL {
-	dg.dplane.lock.RLock()
-	defer dg.dplane.lock.RUnlock()
-	return dg.ttl
-}
-
-// SetGroupTimeout updates the idle timeout used for future drain decisions.
-func (dg *DNATGroup) SetGroupTimeout(ttl config.TTL) {
-	dg.dplane.lock.Lock()
-	defer dg.dplane.lock.Unlock()
-	dg.ttl = ttl
-}
-
-// FlowTimeout returns the conntrack timeout configured for a source/protocol
-// mapping.
-func (dg *DNATGroup) FlowTimeout(source netip.AddrPort, protocol config.Protocol) (config.TTL, error) {
+// Timeout returns the conntrack timeout configured for a mapping.
+func (dg *ConnftGroup) Timeout(protocol config.Protocol, source netip.AddrPort) (config.TTL, error) {
 	dg.dplane.lock.RLock()
 	defer dg.dplane.lock.RUnlock()
 	m, exists := dg.mappingsBySrc[dnatKey{source, protocol}]
 	if !exists {
-		return 0, fmt.Errorf("source not mapped: (%s) %s", protocol, source)
+		return 0, dataplane.ErrNoSuchMapping
 	}
-	return m.FlowTimeout, nil
+	return m.Timeout, nil
 }
 
-// SetFlowTimeout changes the conntrack timeout for an existing mapping.
-func (dg *DNATGroup) SetFlowTimeout(source netip.AddrPort, protocol config.Protocol, ttl config.TTL) error {
+// SetTimeout changes the conntrack timeout for an existing mapping.
+func (dg *ConnftGroup) SetTimeout(protocol config.Protocol, source netip.AddrPort, timeout config.TTL) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
 	m, exists := dg.mappingsBySrc[dnatKey{source, protocol}]
 	if !exists {
-		return fmt.Errorf("source not mapped: (%s) %s", protocol, source)
+		return dataplane.ErrNoSuchMapping
 	}
-	if m.FlowTimeout == ttl {
+	if m.Timeout == timeout {
 		return nil
 	}
-	if err := dg.ensureTimeoutSet(protocol, source, ttl); err != nil {
+	if err := dg.ensureTimeoutSet(protocol, source, timeout); err != nil {
 		return err
 	}
-	m.FlowTimeout = ttl
+	m.Timeout = timeout
 	dg.mappingsBySrc[dnatKey{source, protocol}] = m
+	dg.mappingsByDst[dnatKey{m.Destination, m.Protocol}] = m
 	return nil
 }
 
 // Mappings returns a snapshot of this group's mappings. The order is not
 // stable.
-func (dg *DNATGroup) Mappings() []DNATMapping {
+func (dg *ConnftGroup) Mappings() []dataplane.Mapping {
 	dg.dplane.lock.RLock()
 	defer dg.dplane.lock.RUnlock()
 	return dg.mappings()
 }
 
 // AddMappings adds one or more non-overlapping mappings to the group.
-func (dg *DNATGroup) AddMappings(mappings ...DNATMapping) error {
+func (dg *ConnftGroup) AddMappings(mappings ...dataplane.Mapping) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
 	return dg.addMappings(mappings)
 }
 
 // DelMappings removes exact mappings from the group.
-func (dg *DNATGroup) DelMappings(mappings ...DNATMapping) error {
+func (dg *ConnftGroup) DelMappings(mappings ...dataplane.Mapping) error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
 	return dg.delMappings(mappings)
 }
 
 // ClearMappings removes every mapping from the group.
-func (dg *DNATGroup) ClearMappings() error {
+func (dg *ConnftGroup) ClearMappings() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
 	return dg.clearMappings()
 }
 
 // Enable installs this group's mappings so traffic can be forwarded.
-func (dg *DNATGroup) Enable() error {
+func (dg *ConnftGroup) Enable() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
 	if dg.enabled {
@@ -171,7 +155,7 @@ func (dg *DNATGroup) Enable() error {
 }
 
 // Disable removes this group's mappings from the live dataplane.
-func (dg *DNATGroup) Disable() error {
+func (dg *ConnftGroup) Disable() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
 	if !dg.enabled {
@@ -187,17 +171,17 @@ func (dg *DNATGroup) Disable() error {
 }
 
 // Close evicts this group from its parent Dataplane and renders this group unusable.
-func (dg *DNATGroup) Close() error {
+func (dg *ConnftGroup) Close() error {
 	dg.dplane.lock.Lock()
 	defer dg.dplane.lock.Unlock()
 	return dg.close()
 }
 
-func (dg *DNATGroup) mappings() []DNATMapping {
+func (dg *ConnftGroup) mappings() []dataplane.Mapping {
 	return slices.Collect(maps.Values(dg.mappingsBySrc))
 }
 
-func (dg *DNATGroup) addMappings(mappings []DNATMapping) error {
+func (dg *ConnftGroup) addMappings(mappings []dataplane.Mapping) error {
 	if len(mappings) == 0 {
 		return nil
 	}
@@ -207,7 +191,7 @@ func (dg *DNATGroup) addMappings(mappings []DNATMapping) error {
 		if err := m.Validate(); err != nil {
 			return err
 		}
-		for currGroupName, currGroup := range dg.dplane.dnatGroups {
+		for currGroupName, currGroup := range dg.dplane.groups {
 			for _, x := range currGroup.mappingsBySrc {
 				if m.Overlaps(&x) {
 					return fmt.Errorf(
@@ -231,13 +215,14 @@ func (dg *DNATGroup) addMappings(mappings []DNATMapping) error {
 	// update mappings
 	for _, m := range mappings {
 		dg.mappingsBySrc[dnatKey{m.Source, m.Protocol}] = m
-		dg.ensureTimeoutSet(m.Protocol, m.Source, m.FlowTimeout)
+		dg.mappingsByDst[dnatKey{m.Destination, m.Protocol}] = m
+		dg.ensureTimeoutSet(m.Protocol, m.Source, m.Timeout)
 	}
 
 	return nil
 }
 
-func (dg *DNATGroup) delMappings(mappings []DNATMapping) error {
+func (dg *ConnftGroup) delMappings(mappings []dataplane.Mapping) error {
 	if len(mappings) == 0 {
 		return nil
 	}
@@ -250,10 +235,10 @@ func (dg *DNATGroup) delMappings(mappings []DNATMapping) error {
 		}
 		x, exists := dg.mappingsBySrc[dnatKey{m.Source, m.Protocol}]
 		if !exists {
-			return fmt.Errorf("source not mapped: %s", m.Source)
+			return dataplane.ErrNoSuchMapping
 		}
 		if x.Destination != m.Destination {
-			return fmt.Errorf("destination not mapped: %s", m.Destination)
+			return dataplane.ErrNoSuchMapping
 		}
 	}
 
@@ -268,25 +253,25 @@ func (dg *DNATGroup) delMappings(mappings []DNATMapping) error {
 	// remove mappings from the group
 	for _, m := range mappings {
 		delete(dg.mappingsBySrc, dnatKey{m.Source, m.Protocol})
+		delete(dg.mappingsByDst, dnatKey{m.Destination, m.Protocol})
 		dg.ensureTimeoutDeleted(m.Protocol, m.Source)
 	}
 	return nil
 }
 
-func (dg *DNATGroup) clearMappings() error {
+func (dg *ConnftGroup) clearMappings() error {
 	// clear from nftables
 	mappings := dg.mappings()
 	return dg.delMappings(mappings)
 	// FYI: group remains enabled or disabled here
 }
 
-func (dg *DNATGroup) close() error {
-	// TODO: wait for targets/frontends to close, otherwise they see "source not mapped" errors
+func (dg *ConnftGroup) close() error {
 	if dg.closed {
 		return nil
 	}
 	err := dg.clearMappings()
 	dg.closed = true
-	delete(dg.dplane.dnatGroups, dg.name)
+	delete(dg.dplane.groups, dg.name)
 	return err
 }

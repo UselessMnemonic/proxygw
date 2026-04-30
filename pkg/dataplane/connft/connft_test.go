@@ -1,7 +1,6 @@
-package dataplane
+package connft
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -64,7 +63,6 @@ func TestDataplaneLifecycle(t *testing.T) {
 	}
 
 	d.Close()
-	d.Wait()
 	waitForProxyGWTableDeleted(t, tableName)
 
 	if d.Error() != nil {
@@ -83,14 +81,13 @@ func TestDataplaneLifecycle(t *testing.T) {
 func mustNewTestDataplane(t *testing.T, tableName string) *Dataplane {
 	t.Helper()
 
-	d, err := New(context.Background(), tableName)
+	d, err := New(tableName)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
 
 	t.Cleanup(func() {
 		d.Close()
-		d.Wait()
 		waitForProxyGWTableDeleted(t, tableName)
 	})
 

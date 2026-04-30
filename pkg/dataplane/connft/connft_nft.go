@@ -1,4 +1,4 @@
-package dataplane
+package connft
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"net/netip"
 
 	"github.com/UselessMnemonic/proxygw/pkg/config"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
 
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
@@ -28,7 +29,7 @@ var value6 = nftables.MustConcatSetType(
 	nftables.TypeIP6Addr, nftables.TypeInetService,
 )
 
-func (d *Dataplane) ensureTableAdded() error {
+func (d *Connft) ensureTableAdded() error {
 	// clear any old table
 	existingTable, err := d.nft.ListTableOfFamily(d.name, nftables.TableFamilyINet)
 	if err == nil && existingTable != nil {
@@ -54,7 +55,7 @@ func (d *Dataplane) ensureTableAdded() error {
 		KeyType:       keySpecific4,
 		DataType:      value4,
 	}
-	if err := d.nft.AddSet(d.dnatSpecific4, nil); err != nil {
+	if err = d.nft.AddSet(d.dnatSpecific4, nil); err != nil {
 		return fmt.Errorf("define specific ipv4 dnat set: %w", err)
 	}
 
@@ -67,7 +68,7 @@ func (d *Dataplane) ensureTableAdded() error {
 		KeyType:       keySpecific6,
 		DataType:      value6,
 	}
-	if err := d.nft.AddSet(d.dnatSpecific6, nil); err != nil {
+	if err = d.nft.AddSet(d.dnatSpecific6, nil); err != nil {
 		return fmt.Errorf("define specific ipv6 dnat set: %w", err)
 	}
 
@@ -80,7 +81,7 @@ func (d *Dataplane) ensureTableAdded() error {
 		KeyType:       keyWildcard,
 		DataType:      value4,
 	}
-	if err := d.nft.AddSet(d.dnatWildcard4, nil); err != nil {
+	if err = d.nft.AddSet(d.dnatWildcard4, nil); err != nil {
 		return fmt.Errorf("define wildcard ipv4 dnat set: %w", err)
 	}
 
@@ -93,7 +94,7 @@ func (d *Dataplane) ensureTableAdded() error {
 		KeyType:       keyWildcard,
 		DataType:      value6,
 	}
-	if err := d.nft.AddSet(d.dnatWildcard6, nil); err != nil {
+	if err = d.nft.AddSet(d.dnatWildcard6, nil); err != nil {
 		return fmt.Errorf("define wildcard ipv6 dnat set: %w", err)
 	}
 
@@ -142,7 +143,7 @@ func (d *Dataplane) ensureTableAdded() error {
 	return nil
 }
 
-func (d *Dataplane) ensureTableDeleted() error {
+func (d *Connft) ensureTableDeleted() error {
 	d.nft.DelTable(d.table)
 	err := d.nft.Flush()
 	if errors.Is(err, unix.ENOENT) {
@@ -151,7 +152,7 @@ func (d *Dataplane) ensureTableDeleted() error {
 	return err
 }
 
-func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort, ttl config.TTL) error {
+func (dg *ConnftGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort, ttl config.TTL) error {
 	if ttl == 0 {
 		return dg.ensureTimeoutDeleted(proto, addr)
 	}
@@ -203,7 +204,7 @@ func (dg *DNATGroup) ensureTimeoutSet(proto config.Protocol, addr netip.AddrPort
 	return nil
 }
 
-func (dg *DNATGroup) ensureTimeoutDeleted(proto config.Protocol, addr netip.AddrPort) error {
+func (dg *ConnftGroup) ensureTimeoutDeleted(proto config.Protocol, addr netip.AddrPort) error {
 	info, present := dg.flowInfoBySrc[dnatKey{addr, proto}]
 	if !present {
 		return nil
@@ -221,7 +222,7 @@ func (dg *DNATGroup) ensureTimeoutDeleted(proto config.Protocol, addr netip.Addr
 	return nil
 }
 
-func (dg *DNATGroup) ensureDNATAdded(mappings []DNATMapping) error {
+func (dg *ConnftGroup) ensureDNATAdded(mappings []dataplane.Mapping) error {
 	if len(mappings) == 0 {
 		return nil
 	}
@@ -252,7 +253,7 @@ func (dg *DNATGroup) ensureDNATAdded(mappings []DNATMapping) error {
 	return nil
 }
 
-func (dg *DNATGroup) ensureDNATDeleted(mappings []DNATMapping) error {
+func (dg *ConnftGroup) ensureDNATDeleted(mappings []dataplane.Mapping) error {
 	if len(mappings) == 0 {
 		return nil
 	}

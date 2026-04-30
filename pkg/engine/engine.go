@@ -8,22 +8,27 @@ import (
 	"maps"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/UselessMnemonic/proxygw/pkg/config"
 	"github.com/UselessMnemonic/proxygw/pkg/dataplane"
+	"github.com/UselessMnemonic/proxygw/pkg/dataplane/connft"
 	"github.com/UselessMnemonic/proxygw/pkg/frontend"
 	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
+
+const GroupPollPeriod = 60 * time.Second
 
 // Engine is the top-level runtime object for embedding or supervising a proxy
 // gateway. Register handler kinds first, then create targets, then create and
 // start frontends that point at those targets.
 type Engine struct {
-	dplane        *dataplane.Dataplane
+	dplane        dataplane.Dataplane
 	frontends     map[string]*frontend.Frontend
 	frontendCtors map[string]frontend.HandlerCtor
 	targets       map[string]*target.Target
 	targetCtors   map[string]target.HandlerCtor
+	lastSeen      map[string]time.Time
 	logger        *slog.Logger
 
 	wg     sync.WaitGroup
@@ -38,20 +43,21 @@ type Engine struct {
 // dataplane resources.
 func New(ctx context.Context, name string) (*Engine, error) {
 	ctx, cancel := context.WithCancel(ctx)
-	logger := slog.Default().With("component", "engine", "name", name)
+	logger := slog.Default().With("component", "engine", "dataplane", name)
 
-	plane, err := dataplane.New(ctx, name)
+	dplane, err := connft.New(name)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("creating dataplane: %w", err)
 	}
 
 	e := &Engine{
-		dplane:        plane,
+		dplane:        dplane,
 		frontends:     make(map[string]*frontend.Frontend),
 		frontendCtors: make(map[string]frontend.HandlerCtor),
 		targets:       make(map[string]*target.Target),
 		targetCtors:   make(map[string]target.HandlerCtor),
+		lastSeen:      make(map[string]time.Time),
 		logger:        logger,
 
 		lock:   sync.RWMutex{},
@@ -80,7 +86,6 @@ func (e *Engine) Close() {
 // Wait blocks until shutdown has been requested and all resource goroutines
 // known to the engine have exited.
 func (e *Engine) Wait() {
-	<-e.ctx.Done()
 	e.wg.Wait()
 }
 
@@ -227,7 +232,7 @@ func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 		return nil, fmt.Errorf("handler for kind %q: %w", cfg.Kind, err)
 	}
 
-	dnat, err := e.dplane.NewDNATGroup(cfg.Name, cfg.IdleTimeout)
+	dnat, err := e.dplane.NewGroup(cfg.Name)
 	if err != nil {
 		return nil, fmt.Errorf("flow group: %w", err)
 	}
@@ -242,6 +247,7 @@ func (e *Engine) NewTarget(cfg config.Target) (*target.Target, error) {
 	}
 
 	e.targets[t.Name()] = t
+	e.lastSeen[t.Name()] = time.Now()
 	e.joinTarget(t)
 	return t, nil
 }
@@ -278,6 +284,7 @@ func (e *Engine) DelTarget(name string) error {
 		return ErrTargetInUse
 	}
 	delete(e.targets, name)
+	delete(e.lastSeen, name)
 	return nil
 }
 
@@ -385,9 +392,43 @@ func (e *Engine) joinFrontend(f *frontend.Frontend) {
 func (e *Engine) start() {
 	go func() {
 		e.logger.Info("engine event loop started")
-		<-e.ctx.Done()
-		e.logger.Info("engine event loop stopping")
-		e.Close()
-		e.logger.Info("engine event loop stopped")
+		ticker := time.NewTicker(GroupPollPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-e.ctx.Done():
+				e.logger.Info("engine event loop stopping")
+				e.Close()
+				go func() {
+					e.Wait()
+					e.dplane.Close()
+					e.logger.Info("engine event loop stopped")
+				}()
+				return
+			case timestamp := <-ticker.C:
+				e.logger.Debug("polling for stale groups", "timestamp", timestamp)
+				stale, err := e.dplane.StaleGroups()
+				if err != nil {
+					e.logger.Error("poll failed", "err", err)
+					continue
+				}
+				e.detectTimeouts(stale, timestamp)
+			}
+		}
 	}()
+}
+
+func (e *Engine) detectTimeouts(stale []dataplane.Group, timestamp time.Time) {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+	for targetName, target := range e.targets {
+		if slices.Contains(stale, target.Group()) {
+			if timestamp.Sub(e.lastSeen[targetName]) > target.Timeout().ToDuration() {
+				ok := target.Drain()
+				e.logger.Debug("target timeout", "target", targetName, "drain", ok)
+			}
+		} else {
+			e.lastSeen[targetName] = timestamp
+		}
+	}
 }

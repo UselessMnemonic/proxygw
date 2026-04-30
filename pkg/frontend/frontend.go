@@ -23,7 +23,7 @@ type Frontend struct {
 	target   *target.Target
 	endpoint target.Endpoint
 	requests chan State
-	mapping  dataplane.DNATMapping
+	mapping  dataplane.Mapping
 
 	wg     sync.WaitGroup
 	lock   sync.RWMutex
@@ -33,7 +33,7 @@ type Frontend struct {
 	state  State
 }
 
-// New builds a frontend around a handler handler and reserves its dataplane
+// New builds a frontend around a handler and reserves its dataplane
 // mapping. The caller still needs to call Start before the listener accepts
 // traffic.
 func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, handler Handler, cfg config.Frontend) (*Frontend, error) {
@@ -47,17 +47,16 @@ func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, h
 		return nil, errors.New("handler is nil")
 	}
 
-	mapping := dataplane.DNATMapping{
+	mapping := dataplane.Mapping{
 		Protocol:    cfg.Protocol,
-		FlowTimeout: cfg.FlowTimeout,
 		Source:      cfg.Listen,
 		Destination: endpoint.Address,
+		Timeout:     cfg.FlowTimeout,
 	}
-	err := target.DNATGroup().AddMappings(mapping)
+	err := target.Group().AddMappings(mapping)
 	if err != nil {
 		return nil, fmt.Errorf("failed to bind target: %w", err)
 	}
-	err = target.DNATGroup().SetFlowTimeout(mapping.Source, mapping.Protocol, mapping.FlowTimeout)
 
 	ctx, cancel := context.WithCancel(ctx)
 	f := &Frontend{
@@ -253,7 +252,7 @@ func (f *Frontend) endBlocking() {
 
 	err := errors.Join(
 		f.handler.Close(),
-		f.target.DNATGroup().DelMappings(f.mapping),
+		f.target.Group().DelMappings(f.mapping),
 	)
 
 	f.lock.Lock()
