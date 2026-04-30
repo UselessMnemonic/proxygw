@@ -63,11 +63,11 @@ func onUnload() error {
 }
 
 func init() {
-	err := plugin.Register("ctl", plugin.Handler{
+	ok := plugin.Register("ctl", plugin.Handler{
 		OnLoad:   onLoad,
 		OnUnload: onUnload,
 	})
-	if err != nil {
-		panic(err)
+	if !ok {
+		panic("failed to register ctl")
 	}
 }

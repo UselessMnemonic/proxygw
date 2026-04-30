@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	err := plugin.Register("static", plugin.Handler{
+	ok := plugin.Register("static", plugin.Handler{
 		OnLoad: func(_ map[string]any, _ *engine.Engine, namespace *plugin.Namespace) error {
 			namespace.Frontends["always"] = frontends.NewAlwaysHandler
 			namespace.Frontends["http"] = frontends.NewHTTPHandler
@@ -20,7 +20,7 @@ func init() {
 			return nil
 		},
 	})
-	if err != nil {
-		panic(err)
+	if !ok {
+		panic("failed to register static")
 	}
 }

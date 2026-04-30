@@ -1,2 +1,3 @@
-ctl: builtin
-static: builtin
+plugins:
+  ctl: ctl
+  static: static

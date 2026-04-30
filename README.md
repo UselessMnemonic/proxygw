@@ -140,16 +140,18 @@ A frontend owns a frontend handler and a DNAT mapping from its configured `liste
 
 ## Plugins
 
-Built-in plugins are selected in `plugin.yaml`:
+Build-time plugins are selected and namespaced in `plugin.yaml`:
 
 ```yaml
-ctl: builtin
-static: builtin
+plugins:
+  ctl: ctl
+  static: static
+  github.com/UselessMnemonic/proxygw-aws: aws
 ```
 
-For built-in plugins, the key must match a directory under `plugin/`. Non-built-in entries are treated as import paths by the generator.
+The `plugins` mapping is read in file order. For built-in plugins, the key must match a directory under `plugin/`. Non-built-in keys are treated as import paths by the generator. The value is the namespace used by runtime config references such as `static:http` or `aws:ec2`.
 
-Plugin authors register handlers with `plugin.Register`. A plugin may define:
+Plugin authors register handlers with `plugin.Register(source, handler)`, where `source` matches the `plugin.yaml` key. A plugin may define:
 
 - `OnLoad(config, engine, namespace)`: receives plugin config, the engine, and a namespace to populate.
 - `OnUnload()`: called during daemon shutdown.
@@ -160,7 +162,7 @@ Frontend and target handler interfaces live in `pkg/frontend/handler.go` and `pk
 
 - `cmd/proxygw`: daemon entrypoint.
 - `cmd/proxygwctl`: control client.
-- `cmd/tool`: plugin import generator.
+- `cmd/proxygw/gen`: plugin import generator.
 - `configs`: JSON schemas for runtime and plugin config.
 - `pkg/config`: typed YAML config model and validation.
 - `pkg/dataplane`: nftables, conntrack, DNAT, and timeout handling.

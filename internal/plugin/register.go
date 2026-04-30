@@ -1,9 +1,6 @@
 package plugin
 
 import (
-	"fmt"
-	"sync"
-
 	"github.com/UselessMnemonic/proxygw/pkg/engine"
 	"github.com/UselessMnemonic/proxygw/pkg/frontend"
 	"github.com/UselessMnemonic/proxygw/pkg/target"
@@ -21,25 +18,21 @@ type Handler struct {
 	OnUnload func() error
 }
 
+var registry = make(map[string]Handler)
+
 // Register adds a plugin handler to the process-local registry.
-func Register(name string, handler Handler) error {
-	registry.mu.Lock()
-	defer registry.mu.Unlock()
-	if _, exists := registry.handlers[name]; exists {
-		return fmt.Errorf("%q is already registered", name)
+func Register(source string, handler Handler) bool {
+	if source == "" {
+		return false
 	}
-	registry.handlers[name] = handler
-	return nil
+	if _, exists := registry[source]; exists {
+		return false
+	}
+	registry[source] = handler
+	return true
 }
 
-// Export returns the process-local plugin registry.
-func Export() map[string]Handler {
-	return registry.handlers
-}
-
-var registry = struct {
-	mu       sync.Mutex
-	handlers map[string]Handler
-}{
-	handlers: make(map[string]Handler),
+func Find(source string) (Handler, bool) {
+	handler, exists := registry[source]
+	return handler, exists
 }

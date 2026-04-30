@@ -10,7 +10,7 @@ type Handler = internal.Handler
 // Namespace contains logically grouped resources for a plugin
 type Namespace = internal.Namespace
 
-// Register registers a plugin.
-func Register(name string, handler Handler) error {
-	return internal.Register(name, handler)
+// Register registers a plugin by its source import path.
+func Register(source string, handler Handler) bool {
+	return internal.Register(source, handler)
 }

@@ -1,7 +1,5 @@
 package main
 
-//go:generate go run ../tool/gen.go
-
 import (
 	"context"
 	"errors"
@@ -23,6 +21,14 @@ import (
 	"github.com/UselessMnemonic/proxygw/pkg/frontend"
 	"github.com/UselessMnemonic/proxygw/pkg/target"
 )
+
+//go:generate go run ./gen/main.go
+type pluginDecl struct {
+	Source string
+	Name   string
+}
+
+var pluginDecls = make([]pluginDecl, 0)
 
 func setDefaultLogger(dst io.Writer, level slog.Level) *slog.Logger {
 	options := slog.HandlerOptions{
@@ -119,36 +125,42 @@ func loadConfig(path string) (*config.Config, error) {
 }
 
 func pluginScope(logger *slog.Logger, ctx context.Context, cfg *config.Config, eng *engine.Engine) (err error) {
-	registry := plugin.Export()
-	for pluginName, handler := range registry {
-		namespace := &plugin.Namespace{
+	for _, decl := range pluginDecls {
+
+		handler, exists := plugin.Find(decl.Source)
+		if !exists {
+			logger.Error(fmt.Sprintf("plugin source not found: %q", decl.Source))
+			continue
+		}
+		logger.Info("found plugin", "source", decl.Source, "name", decl.Name)
+
+		var pluginConfig map[string]any
+		if cfg.Plugins != nil {
+			pluginConfig = cfg.Plugins[decl.Name]
+		}
+		namespace := plugin.Namespace{
 			Frontends: make(map[string]frontend.HandlerCtor),
 			Targets:   make(map[string]target.HandlerCtor),
 		}
 
-		var pluginConfig map[string]any
-		if cfg.Plugins != nil {
-			pluginConfig = cfg.Plugins[pluginName]
-		}
-
 		if handler.OnLoad != nil {
-			logger.Info("loading plugin", "plugin", pluginName)
-			if err := handler.OnLoad(pluginConfig, eng, namespace); err != nil {
-				return fmt.Errorf("load plugin %q: %w", pluginName, err)
+			logger.Info("loading plugin", "name", decl.Name)
+			if err := handler.OnLoad(pluginConfig, eng, &namespace); err != nil {
+				return fmt.Errorf("load plugin %q: %w", decl.Name, err)
 			}
-			logger.Info("plugin loaded", "plugin", pluginName)
-			defer func(pluginName string, handler plugin.Handler) {
+			logger.Info("plugin loaded", "name", decl.Name)
+			defer func() {
 				if handler.OnUnload == nil {
 					return
 				}
-				err = errors.Join(err, unloadPlugin(logger, pluginName, handler))
-			}(pluginName, handler)
+				err = errors.Join(err, unloadPlugin(logger, decl.Name, handler))
+			}()
 		}
 
-		if err := registerKinds(eng, pluginName, namespace); err != nil {
-			return fmt.Errorf("register plugin %q kinds: %w", pluginName, err)
+		if err := registerKinds(eng, decl.Name, &namespace); err != nil {
+			return fmt.Errorf("register plugin %q kinds: %w", decl.Name, err)
 		}
-		logger.Info("plugin kinds registered", "plugin", pluginName, "frontends", len(namespace.Frontends), "targets", len(namespace.Targets))
+		logger.Info("plugin kinds registered", "name", decl.Name, "frontends", len(namespace.Frontends), "targets", len(namespace.Targets))
 	}
 
 	return resourceScope(logger, ctx, cfg, eng)
@@ -218,15 +230,15 @@ func applyConfig(logger *slog.Logger, cfg *config.Config, eng *engine.Engine) er
 	return nil
 }
 
-func unloadPlugin(logger *slog.Logger, name string, handler plugin.Handler) error {
+func unloadPlugin(logger *slog.Logger, pluginName string, handler plugin.Handler) error {
 	if handler.OnUnload == nil {
 		return nil
 	}
-	logger.Info("unloading plugin", "plugin", name)
+	logger.Info("unloading plugin", "plugin", pluginName)
 	if err := handler.OnUnload(); err != nil {
-		return fmt.Errorf("unload plugin %q: %w", name, err)
+		return fmt.Errorf("unload plugin %q: %w", pluginName, err)
 	}
-	logger.Info("plugin unloaded", "plugin", name)
+	logger.Info("plugin unloaded", "plugin", pluginName)
 	return nil
 }
 
