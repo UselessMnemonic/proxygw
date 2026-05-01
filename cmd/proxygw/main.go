@@ -40,7 +40,7 @@ func setDefaultLogger(dst io.Writer, level slog.Level) *slog.Logger {
 		Level: level,
 	}
 	handler := slog.NewTextHandler(dst, &options)
-	logger := slog.New(handler).With("component", "proxygw")
+	logger := slog.New(handler)
 	slog.SetDefault(logger)
 	return logger
 }

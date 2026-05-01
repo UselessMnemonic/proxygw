@@ -44,7 +44,7 @@ func New(ctx context.Context, dplane dataplane.Dataplane) (*Engine, error) {
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	logger := slog.Default().With("component", "engine")
+	logger := slog.Default()
 
 	e := &Engine{
 		dplane:        dplane,

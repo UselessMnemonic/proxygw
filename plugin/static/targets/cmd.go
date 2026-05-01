@@ -107,7 +107,7 @@ func NewCmdHandler(name string, options map[string]any) (target.Handler, error) 
 
 	return &CmdHandler{
 		command: command,
-		logger:  slog.Default().With("component", "handler", "name", "cmd", "target", name),
+		logger:  slog.Default().With("target", name, "handler", "cmd"),
 	}, nil
 }
 

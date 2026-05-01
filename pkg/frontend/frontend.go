@@ -63,7 +63,7 @@ func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, h
 		name:    cfg.Name,
 		kind:    cfg.Kind.String(),
 		handler: handler,
-		logger:  slog.Default().With("component", "frontend", "name", cfg.Name),
+		logger:  slog.Default().With("frontend", cfg.Name),
 
 		target:   target,
 		endpoint: endpoint,

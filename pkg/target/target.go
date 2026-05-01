@@ -66,7 +66,7 @@ func New(ctx context.Context, group dataplane.Group, handler Handler, cfg config
 		kind:    cfg.Kind.String(),
 		timeout: cfg.IdleTimeout,
 		handler: handler,
-		logger:  slog.Default().With("component", "target", "name", cfg.Name),
+		logger:  slog.Default().With("target", cfg.Name),
 
 		group:     group,
 		requests:  make(chan State, 1),
