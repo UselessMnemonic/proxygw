@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	ok := plugin.Register("static", plugin.Handler{
+	ok := plugin.Register("github.com/UselessMnemonic/proxygw/plugin/static", plugin.Handler{
 		OnLoad: func(_ map[string]any, _ *engine.Engine, namespace *plugin.Namespace) error {
 			namespace.Frontends["always"] = frontends.NewAlwaysHandler
 			namespace.Frontends["http"] = frontends.NewHTTPHandler

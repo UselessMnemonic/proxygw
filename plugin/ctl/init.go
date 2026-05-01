@@ -63,7 +63,7 @@ func onUnload() error {
 }
 
 func init() {
-	ok := plugin.Register("ctl", plugin.Handler{
+	ok := plugin.Register("github.com/UselessMnemonic/proxygw/plugin/ctl", plugin.Handler{
 		OnLoad:   onLoad,
 		OnUnload: onUnload,
 	})
