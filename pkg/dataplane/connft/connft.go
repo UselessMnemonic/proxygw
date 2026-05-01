@@ -49,7 +49,7 @@ func New(name string) (*Connft, error) {
 		ct:     ct,
 		nft:    nft,
 		groups: make(map[string]*ConnftGroup),
-		logger: slog.Default().With("component", "dataplane", "table", name),
+		logger: slog.Default().With("component", "dataplane"),
 
 		lock:   sync.RWMutex{},
 		closed: false,

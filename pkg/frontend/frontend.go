@@ -63,7 +63,7 @@ func New(ctx context.Context, target *target.Target, endpoint target.Endpoint, h
 		name:    cfg.Name,
 		kind:    cfg.Kind.String(),
 		handler: handler,
-		logger:  slog.Default().With("component", "frontend", "name", cfg.Name, "kind", cfg.Kind.String(), "target", target.Name(), "endpoint", endpoint.Name),
+		logger:  slog.Default().With("component", "frontend", "name", cfg.Name),
 
 		target:   target,
 		endpoint: endpoint,
@@ -146,6 +146,7 @@ func (f *Frontend) Close() {
 	}
 	f.state = Closed
 	f.lock.Unlock()
+	f.logger.Debug("submitting cancel")
 	f.cancel()
 }
 
@@ -162,6 +163,7 @@ func (f *Frontend) Start() bool {
 	case Stopped:
 		f.err = nil
 		f.state = Starting
+		f.logger.Debug("submitting Starting")
 		f.requests <- Starting
 		return true
 	default:
@@ -182,6 +184,7 @@ func (f *Frontend) Stop() bool {
 	case Running:
 		f.err = nil
 		f.state = Stopping
+		f.logger.Debug("submitting Stopping")
 		f.requests <- Stopping
 		return true
 	default:
@@ -190,70 +193,82 @@ func (f *Frontend) Stop() bool {
 }
 
 func (f *Frontend) startBlocking() {
+	f.logger.Info("start requested")
 	f.lock.RLock()
 	if f.state == Closed {
 		f.lock.RUnlock()
+		f.logger.Info("start skipped because frontend is closed")
 		return
 	}
 	f.lock.RUnlock()
 
-	f.logger.Info("start started", "listen", f.Listen())
+	f.logger.Debug("calling into handler start")
 	err := f.handler.Start()
+	f.logger.Debug("exiting handler start")
 
 	f.lock.Lock()
 	defer f.lock.Unlock()
 	if f.state == Closed {
+		f.logger.Info("start ended early because frontend is closed")
 		return
 	}
 	f.err = err
 	if f.err != nil {
 		f.state = Stopping
-		f.logger.Error("start completed", "err", f.err)
+		f.logger.Error("start failed", "err", f.err)
 		return
 	}
 
 	// the frontend is definitely running
 	f.state = Running
-	f.logger.Info("start completed", "listen", f.Listen())
+
+	f.logger.Info("start completed")
 }
 
 func (f *Frontend) stopBlocking() {
+	f.logger.Info("stop requested")
 	f.lock.RLock()
 	if f.state == Closed {
 		f.lock.RUnlock()
+		f.logger.Info("stop skipped because frontend is closed")
 		return
 	}
 	f.lock.RUnlock()
 
-	f.logger.Info("stop started", "listen", f.Listen())
+	f.logger.Debug("calling into handler stop")
 	err := f.handler.Stop()
+	f.logger.Debug("exiting handler stop")
 
 	f.lock.Lock()
 	defer f.lock.Unlock()
 	if f.state == Closed {
+		f.logger.Info("stop ended early because frontend is closed")
 		return
 	}
 	f.err = err
 	if f.err != nil {
 		f.state = Starting
-		f.logger.Error("stop completed", "err", f.err)
+		f.logger.Error("stop failed", "err", f.err)
 		return
 	}
 
 	// the frontend is definitely stopped
 	f.state = Stopped
-	f.logger.Info("stop completed", "listen", f.Listen())
+
+	f.logger.Info("stop completed")
 }
 
 func (f *Frontend) endBlocking() {
+	f.logger.Info("close requested")
 	f.lock.Lock()
 	f.state = Closed
 	f.lock.Unlock()
 
-	err := errors.Join(
-		f.handler.Close(),
-		f.target.Group().DelMappings(f.mapping),
-	)
+	f.logger.Debug("calling into handler close")
+	err := f.handler.Close()
+	f.logger.Debug("exiting handler close")
+
+	err = errors.Join(err, f.target.Group().DelMappings(f.mapping))
 
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -267,31 +282,24 @@ func (f *Frontend) endBlocking() {
 
 func (f *Frontend) start() {
 	f.wg.Go(func() {
+		defer f.logger.Debug("event loop ended")
 		f.logger.Info("event loop started")
-		defer func() {
-			f.endBlocking()
-			if err := f.Error(); err != nil {
-				f.logger.Error("event loop stopped", "state", f.State().String(), "err", err)
-				return
-			}
-			f.logger.Info("event loop stopped", "state", f.State().String())
-		}()
+		defer f.endBlocking()
 		for {
 			select {
 			case <-f.ctx.Done():
+				f.logger.Debug("close signal received")
 				return
 			case <-f.handler.ShouldWarm():
-				ok := f.target.Warm()
-				f.logger.Info("warm signal received", "warm", ok)
+				f.logger.Info("warm signal received", "warm", f.target.Warm())
 			case next := <-f.requests:
 				switch next {
 				case Starting:
-					f.logger.Info("start requested")
 					f.startBlocking()
 				case Stopping:
-					f.logger.Info("stop requested")
 					f.stopBlocking()
 				default:
+					f.logger.Error("unknown signal received", "signal", next)
 					continue
 				}
 			}

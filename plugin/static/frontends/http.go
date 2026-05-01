@@ -125,7 +125,7 @@ func NewHTTPHandler(name string, protocol config.Protocol, address netip.AddrPor
 		address:  address,
 		content:  content,
 		endpoint: endpoint,
-		logger:   slog.Default().With("component", "static:http", "name", name, "endpoint", endpoint),
+		logger:   slog.Default().With("component", "handler", "name", "http", "frontend", name),
 		warm:     make(chan struct{}, 1),
 	}, nil
 }

@@ -66,7 +66,7 @@ func New(ctx context.Context, group dataplane.Group, handler Handler, cfg config
 		kind:    cfg.Kind.String(),
 		timeout: cfg.IdleTimeout,
 		handler: handler,
-		logger:  slog.Default().With("component", "target", "name", cfg.Name, "kind", cfg.Kind.String()),
+		logger:  slog.Default().With("component", "target", "name", cfg.Name),
 
 		group:     group,
 		requests:  make(chan State, 1),
@@ -186,6 +186,7 @@ func (t *Target) Warm() bool {
 	case Inactive:
 		t.err = nil
 		t.state = Warming
+		t.logger.Debug("submitting Warming")
 		t.requests <- Warming
 		return true
 	default:
@@ -206,6 +207,7 @@ func (t *Target) Drain() bool {
 	case Active:
 		t.err = nil
 		t.state = Draining
+		t.logger.Debug("submitting Draining")
 		t.requests <- Draining
 		return true
 	default:
@@ -223,6 +225,7 @@ func (t *Target) Close() {
 	}
 	t.state = Closed
 	t.lock.Unlock()
+	t.logger.Debug("submitting cancel")
 	t.cancel()
 }
 
@@ -233,19 +236,23 @@ func (t *Target) Wait() {
 }
 
 func (t *Target) warmBlocking() {
+	t.logger.Info("warm requested")
 	t.lock.RLock()
 	if t.state == Closed {
 		t.lock.RUnlock()
+		t.logger.Info("warm skipped because target is closed")
 		return
 	}
 	t.lock.RUnlock()
 
-	t.logger.Info("warm started")
+	t.logger.Debug("calling into handler warm")
 	err := t.handler.Warm()
+	t.logger.Debug("exiting handler warm")
 
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	if t.state == Closed {
+		t.logger.Info("warm ended early because target is closed")
 		return
 	}
 	t.err = err
@@ -269,19 +276,23 @@ func (t *Target) warmBlocking() {
 }
 
 func (t *Target) drainBlocking() {
+	t.logger.Info("drain requested")
 	t.lock.RLock()
 	if t.state == Closed {
 		t.lock.RUnlock()
+		t.logger.Info("drain skipped because target is closed")
 		return
 	}
 	t.lock.RUnlock()
 
-	t.logger.Info("drain started")
+	t.logger.Debug("calling into handler drain")
 	err := t.handler.Drain()
+	t.logger.Debug("exiting handler drain")
 
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	if t.state == Closed {
+		t.logger.Info("drain ended early because target is closed")
 		return
 	}
 	t.err = err
@@ -305,14 +316,16 @@ func (t *Target) drainBlocking() {
 }
 
 func (t *Target) endBlocking() {
+	t.logger.Info("close requested")
 	t.lock.Lock()
 	t.state = Closed
 	t.lock.Unlock()
 
-	err := errors.Join(
-		t.handler.Close(),
-		t.group.Close(),
-	)
+	t.logger.Debug("calling into handler close")
+	err := t.handler.Close()
+	t.logger.Debug("exiting handler close")
+
+	err = errors.Join(err, t.group.Close())
 
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -326,28 +339,22 @@ func (t *Target) endBlocking() {
 
 func (t *Target) start() {
 	t.wg.Go(func() {
-		t.logger.Info("event loop started")
-		defer func() {
-			t.endBlocking()
-			if err := t.Error(); err != nil {
-				t.logger.Error("event loop stopped", "state", t.State().String(), "err", err)
-				return
-			}
-			t.logger.Info("event loop stopped", "state", t.State().String())
-		}()
+		defer t.logger.Debug("event loop ended")
+		t.logger.Debug("event loop started")
+		defer t.endBlocking()
 		for {
 			select {
 			case <-t.ctx.Done():
+				t.logger.Debug("close signal received")
 				return
 			case next := <-t.requests:
 				switch next {
 				case Warming:
-					t.logger.Info("warm requested")
 					t.warmBlocking()
 				case Draining:
-					t.logger.Info("drain requested")
 					t.drainBlocking()
 				default:
+					t.logger.Error("unknown signal received", "signal", next)
 					continue
 				}
 			}

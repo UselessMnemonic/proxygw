@@ -28,6 +28,11 @@ type pluginDecl struct {
 	Name   string
 }
 
+type loadedPlugin struct {
+	name    string
+	handler plugin.Handler
+}
+
 var pluginDecls = make([]pluginDecl, 0)
 
 func setDefaultLogger(dst io.Writer, level slog.Level) *slog.Logger {
@@ -102,8 +107,17 @@ func run(logger *slog.Logger, configPath string) (err error) {
 	}
 	logger.Info("engine created", "name", "proxygw")
 
-	err = pluginScope(logger, ctx, cfg, eng)
+	loadedPlugins, err := loadPlugins(logger, cfg, eng)
+	if err != nil {
+		closeEngine(logger, eng)
+		_ = unloadPlugins(logger, loadedPlugins)
+		closeDataplane(logger, dplane)
+		return err
+	}
+
+	err = resourceScope(logger, ctx, cfg, eng)
 	closeEngine(logger, eng)
+	err = errors.Join(err, unloadPlugins(logger, loadedPlugins))
 	closeDataplane(logger, dplane)
 	return err
 }
@@ -124,7 +138,8 @@ func loadConfig(path string) (*config.Config, error) {
 	return cfg, nil
 }
 
-func pluginScope(logger *slog.Logger, ctx context.Context, cfg *config.Config, eng *engine.Engine) (err error) {
+func loadPlugins(logger *slog.Logger, cfg *config.Config, eng *engine.Engine) ([]loadedPlugin, error) {
+	loaded := make([]loadedPlugin, 0, len(pluginDecls))
 	for _, decl := range pluginDecls {
 
 		handler, exists := plugin.Find(decl.Source)
@@ -146,24 +161,19 @@ func pluginScope(logger *slog.Logger, ctx context.Context, cfg *config.Config, e
 		if handler.OnLoad != nil {
 			logger.Info("loading plugin", "name", decl.Name)
 			if err := handler.OnLoad(pluginConfig, eng, &namespace); err != nil {
-				return fmt.Errorf("load plugin %q: %w", decl.Name, err)
+				return loaded, fmt.Errorf("load plugin %q: %w", decl.Name, err)
 			}
 			logger.Info("plugin loaded", "name", decl.Name)
-			defer func() {
-				if handler.OnUnload == nil {
-					return
-				}
-				err = errors.Join(err, unloadPlugin(logger, decl.Name, handler))
-			}()
+			loaded = append(loaded, loadedPlugin{name: decl.Name, handler: handler})
 		}
 
 		if err := registerKinds(eng, decl.Name, &namespace); err != nil {
-			return fmt.Errorf("register plugin %q kinds: %w", decl.Name, err)
+			return loaded, fmt.Errorf("register plugin %q kinds: %w", decl.Name, err)
 		}
 		logger.Info("plugin kinds registered", "name", decl.Name, "frontends", len(namespace.Frontends), "targets", len(namespace.Targets))
 	}
 
-	return resourceScope(logger, ctx, cfg, eng)
+	return loaded, nil
 }
 
 func resourceScope(logger *slog.Logger, ctx context.Context, cfg *config.Config, eng *engine.Engine) error {
@@ -240,6 +250,14 @@ func unloadPlugin(logger *slog.Logger, pluginName string, handler plugin.Handler
 	}
 	logger.Info("plugin unloaded", "plugin", pluginName)
 	return nil
+}
+
+func unloadPlugins(logger *slog.Logger, plugins []loadedPlugin) error {
+	var err error
+	for i := len(plugins) - 1; i >= 0; i-- {
+		err = errors.Join(err, unloadPlugin(logger, plugins[i].name, plugins[i].handler))
+	}
+	return err
 }
 
 func closeEngine(logger *slog.Logger, eng *engine.Engine) {

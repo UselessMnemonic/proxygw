@@ -44,7 +44,7 @@ func New(ctx context.Context, dplane dataplane.Dataplane) (*Engine, error) {
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	logger := slog.Default().With("component", "engine", "dataplane", dplane.Name())
+	logger := slog.Default().With("component", "engine")
 
 	e := &Engine{
 		dplane:        dplane,
@@ -391,17 +391,18 @@ func (e *Engine) joinFrontend(f *frontend.Frontend) {
 
 func (e *Engine) start() {
 	go func() {
-		e.logger.Info("engine event loop started")
+		defer e.logger.Debug("event loop ended")
+		e.logger.Debug("event loop started")
 		ticker := time.NewTicker(GroupPollPeriod)
 		defer ticker.Stop()
+		defer e.Close()
 		for {
 			select {
 			case <-e.ctx.Done():
-				e.logger.Info("engine event loop stopping")
-				e.Close()
+				e.logger.Debug("close signal received")
 				return
 			case timestamp := <-ticker.C:
-				e.logger.Debug("polling for stale groups")
+				e.logger.Debug("polling signal received")
 				stale, err := e.dplane.StaleGroups()
 				if err != nil {
 					e.logger.Error("poll failed", "err", err)
