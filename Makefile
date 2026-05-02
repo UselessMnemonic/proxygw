@@ -7,7 +7,11 @@ LDFLAGS ?= -s -w
 
 .PHONY: all proxygw proxygwctl test clean
 
-all: proxygw proxygwctl
+all: plugins proxygw proxygwctl
+
+plugins:
+	$(GO) generate ./cmd/proxygw
+	go mod tidy
 
 proxygw:
 	mkdir -p $(BINDIR)
