@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/proxygw-logo-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="assets/proxygw-logo.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/proxygw-logo-colorful-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/proxygw-logo-colorful.svg">
     <img alt="Proxy Gateway logo" src="assets/proxygw-logo.svg" width="260">
   </picture>
 </p>
