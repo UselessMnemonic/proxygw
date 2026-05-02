@@ -177,3 +177,5 @@ Frontend and target handler interfaces live in `pkg/frontend/handler.go` and `pk
 - Conntrack is currently polled rather than subcribed to, therefore use a sufficiently large timeout for any target.
 - Regarding the above, ProxyGW works best for applications with long flows.
 - There is no support for the `output` chain, therefore local traffic is never proxied
+- Some configuraiton is redundant, like frontend and backend both specifying protocol; This will be reduced in the future
+- Though a frontend can bind to `[::]`, dual-home DNAT is not expressed in the configuration. Therefore, individual IPv4 and IPv6 targets must be defined.
